@@ -1,15 +1,25 @@
+
 from fastapi import FastAPI
 
+from app.api.health import router as health_router
+from app.api.medicines import router as medicines_router
+from app.core.config import settings
+
+
 app = FastAPI(
-    title="DoubleDose AI API",
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
     description="Medicine ingredient overlap checker",
-    version="0.1.0",
 )
 
+app.include_router(health_router)
+app.include_router(medicines_router)
 
-@app.get("/health")
-def health_check():
+
+@app.get("/")
+def root():
     return {
-        "status": "ok",
-        "service": "DoubleDose AI API",
+        "message": "Welcome to DoubleDose AI API",
+        "docs": "/docs",
+        "health": "/health",
     }
