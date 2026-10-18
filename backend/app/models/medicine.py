@@ -7,9 +7,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.db.base import Base
-
+from datetime import datetime
+from sqlalchemy import DateTime
 
 class Medicine(Base):
     __tablename__ = "medicines"
@@ -93,7 +93,22 @@ class MedicineIngredient(Base):
         String(30),
         nullable=True,
     )
-
+    source_name: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    source_record_id: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+    source_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     medicine: Mapped["Medicine"] = relationship(
         back_populates="ingredients",
     )
