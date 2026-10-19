@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -12,11 +11,13 @@ class MedicineResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class IngredientResponse(BaseModel):
     id: int
     name: str
     amount: float | None = None
     unit: str | None = None
+
 
 class OverlapCheckRequest(BaseModel):
     medicine_ids: list[int] = Field(
@@ -32,11 +33,13 @@ class OverlapCheckRequest(BaseModel):
             raise ValueError("Medicine IDs must be unique")
         return value
 
+
 class OverlappingIngredient(BaseModel):
     ingredient_id: int
     name: str
     medicine_ids: list[int]
     medicine_names: list[str]
+
 
 class OverlapCheckResponse(BaseModel):
     medicines: list[MedicineResponse]

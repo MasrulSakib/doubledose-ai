@@ -195,6 +195,39 @@ def test_detects_shared_ingredient(client, sample_medicines):
         data["overlapping_ingredients"][0]["name"]
         == "test shared ingredient"
     )
+    
+
+def test_overlap_response_includes_medicine_display_names(
+    client,
+    sample_medicines,
+):
+    response = client.post(
+        "/api/v1/medicines/check-overlap",
+        json={
+            "medicine_ids": [
+                sample_medicines["a"],
+                sample_medicines["b"],
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    medicines = {
+        medicine["id"]: medicine
+        for medicine in data["medicines"]
+    }
+
+    assert (
+        medicines[sample_medicines["a"]]["source_display_name"]
+        == "test compound A 325 MG Oral Tablet [Test Product A]"
+    )
+
+    assert (
+        medicines[sample_medicines["b"]]["source_display_name"]
+        == "test compound B 50 MG Oral Capsule [Test Product B]"
+    )
 
 
 def test_returns_no_overlap_for_distinct_ingredients(

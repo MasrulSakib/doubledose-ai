@@ -186,7 +186,7 @@ def save_medicine(
                     f"{BASE_URL}/rxcui/"
                     f"{medicine_data['rxcui']}/related.json?tty=IN"
                 ),
-                verified_at=datetime.now(timezone.utc),
+                retrieved_at=datetime.now(timezone.utc),
             )
         )
         existing_links.add(ingredient.id)

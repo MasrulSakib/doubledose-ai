@@ -123,9 +123,9 @@ class MedicineIngredient(Base):
         String(500),
         nullable=True,
     )
-    verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
+    retrieved_at: Mapped[datetime | None] = mapped_column(
+    DateTime(timezone=True),
+    nullable=True,
     )
     medicine: Mapped["Medicine"] = relationship(
         back_populates="ingredients",
