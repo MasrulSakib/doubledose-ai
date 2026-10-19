@@ -37,6 +37,13 @@ class Medicine(Base):
         nullable=True,
     )
 
+    rxnorm_rxcui: Mapped[str | None] = mapped_column(
+        String(20),
+        unique=True,
+        nullable=True,
+        index=True,
+    )    
+
     ingredients: Mapped[list["MedicineIngredient"]] = relationship(
         back_populates="medicine",
         cascade="all, delete-orphan",
@@ -54,6 +61,13 @@ class ActiveIngredient(Base):
     name: Mapped[str] = mapped_column(
         String(200),
         unique=True,
+        index=True,
+    )
+
+    rxnorm_rxcui: Mapped[str | None] = mapped_column(
+        String(20),
+        unique=True,
+        nullable=True,
         index=True,
     )
 
