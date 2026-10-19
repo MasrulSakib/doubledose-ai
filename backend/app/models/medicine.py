@@ -23,6 +23,10 @@ class Medicine(Base):
         String(200),
         index=True,
     )
+    source_display_name: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
     generic_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,

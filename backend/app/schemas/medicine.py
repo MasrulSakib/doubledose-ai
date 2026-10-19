@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class MedicineResponse(BaseModel):
     id: int
     brand_name: str
+    source_display_name: str | None = None
     generic_name: str | None = None
     dosage_form: str | None = None
     manufacturer: str | None = None
