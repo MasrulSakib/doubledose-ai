@@ -1,4 +1,3 @@
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -57,14 +56,25 @@ def sample_medicines(db_session):
     medicine_a = Medicine(
         brand_name="Test Product A",
         generic_name="Test Compound A",
+        source_display_name=(
+            "test compound A 325 MG Oral Tablet [Test Product A]"
+        ),
     )
+
     medicine_b = Medicine(
         brand_name="Test Product B",
         generic_name="Test Compound B",
+        source_display_name=(
+            "test compound B 50 MG Oral Capsule [Test Product B]"
+        ),
     )
+
     medicine_c = Medicine(
         brand_name="Test Product C",
         generic_name="Test Compound C",
+        source_display_name=(
+            "test compound C 10 MG Oral Solution [Test Product C]"
+        ),
     )
 
     shared = ActiveIngredient(name="test shared ingredient")
@@ -134,10 +144,37 @@ def test_medicine_search_endpoint(client, sample_medicines):
     assert len(response.json()) == 3
 
 
-def test_detects_shared_ingredient(
-    client,
-    sample_medicines,
-):
+def test_medicine_search_by_strength(client, sample_medicines):
+    response = client.get(
+        "/api/v1/medicines",
+        params={"q": "325 MG"},
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["brand_name"] == "Test Product A"
+    assert "325 MG" in results[0]["source_display_name"]
+
+
+def test_medicine_search_by_dosage_form(client, sample_medicines):
+    response = client.get(
+        "/api/v1/medicines",
+        params={"q": "Oral Tablet"},
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["brand_name"] == "Test Product A"
+    assert "Oral Tablet" in results[0]["source_display_name"]
+
+
+def test_detects_shared_ingredient(client, sample_medicines):
     response = client.post(
         "/api/v1/medicines/check-overlap",
         json={
@@ -151,6 +188,7 @@ def test_detects_shared_ingredient(
     assert response.status_code == 200
 
     data = response.json()
+
     assert data["has_overlap"] is True
     assert len(data["overlapping_ingredients"]) == 1
     assert (
@@ -176,6 +214,7 @@ def test_returns_no_overlap_for_distinct_ingredients(
     assert response.status_code == 200
 
     data = response.json()
+
     assert data["has_overlap"] is False
     assert data["overlapping_ingredients"] == []
 

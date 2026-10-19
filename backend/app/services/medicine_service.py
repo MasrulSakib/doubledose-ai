@@ -22,6 +22,7 @@ def search_medicines(
             or_(
                 Medicine.brand_name.ilike(f"%{search_term}%"),
                 Medicine.generic_name.ilike(f"%{search_term}%"),
+                Medicine.source_display_name.ilike(f"%{query}%"),
             )
         )
         .order_by(Medicine.brand_name)
