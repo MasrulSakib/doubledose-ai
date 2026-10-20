@@ -104,11 +104,41 @@ def fetch_ingredients(
     return ingredients
 
 
+def validate_ingredients(ingredients: list[dict]) -> None:
+    """Reject incomplete or duplicate RxNorm ingredient records."""
+    if not ingredients:
+        raise ValueError("Medicine must have at least one ingredient.")
+
+    seen_rxcuis = set()
+
+    for index, ingredient in enumerate(ingredients):
+        rxcui = ingredient.get("rxcui")
+        name = ingredient.get("name")
+
+        if not isinstance(rxcui, str) or not rxcui.strip():
+            raise ValueError(
+                f"Ingredient at index {index} has a missing or invalid RxNorm ID."
+            )
+
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(
+                f"Ingredient at index {index} has a missing or invalid name."
+            )
+
+        if rxcui in seen_rxcuis:
+            raise ValueError(
+                f"Duplicate RxNorm ingredient ID: {rxcui}"
+            )
+
+        seen_rxcuis.add(rxcui)
+
+
 def save_medicine(
     db: Session,
     medicine_data: dict,
     ingredients: list[dict],
 ) -> str:
+    validate_ingredients(ingredients)
     medicine = db.scalar(
         select(Medicine).where(
             Medicine.rxnorm_rxcui == medicine_data["rxcui"]

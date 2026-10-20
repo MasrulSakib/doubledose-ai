@@ -1,4 +1,5 @@
-
+import pytest
+from scripts.import_rxnorm import validate_ingredients
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -157,3 +158,34 @@ def test_reimport_refreshes_provenance_and_preserves_amount(
     ).all()
 
     assert len(links) == 1
+
+
+def test_validate_ingredients_accepts_valid_records():
+    ingredients = [
+        {"rxcui": "TEST-ING-1", "name": "ingredient one"},
+        {"rxcui": "TEST-ING-2", "name": "ingredient two"},
+    ]
+
+    validate_ingredients(ingredients)
+
+
+def test_validate_ingredients_rejects_empty_list():
+    with pytest.raises(ValueError, match="at least one ingredient"):
+        validate_ingredients([])
+
+
+def test_validate_ingredients_rejects_missing_id():
+    ingredients = [{"rxcui": "", "name": "ingredient one"}]
+
+    with pytest.raises(ValueError, match="RxNorm ID"):
+        validate_ingredients(ingredients)
+
+
+def test_validate_ingredients_rejects_duplicate_ids():
+    ingredients = [
+        {"rxcui": "TEST-ING-1", "name": "ingredient one"},
+        {"rxcui": "TEST-ING-1", "name": "ingredient duplicate"},
+    ]
+
+    with pytest.raises(ValueError, match="Duplicate RxNorm ingredient ID"):
+        validate_ingredients(ingredients)
