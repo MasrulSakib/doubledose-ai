@@ -20,7 +20,7 @@ def check_ingredient_overlap(
     db: Session,
     medicine_ids: list[int],
 ) -> OverlapCheckResponse:
-    """Identify active ingredients shared by multiple medicines."""
+    """Identify shared ingredients and flag missing ingredient data."""
 
     medicines = list(
         db.scalars(
@@ -38,6 +38,22 @@ def check_ingredient_overlap(
             f"Medicine IDs not found: {sorted(missing_ids)}"
         )
 
+    # Identify selected medicines that have ingredient records.
+    ingredient_data_statement = (
+        select(MedicineIngredient.medicine_id)
+        .where(MedicineIngredient.medicine_id.in_(medicine_ids))
+        .distinct()
+    )
+
+    medicines_with_ingredient_data = set(
+        db.scalars(ingredient_data_statement).all()
+    )
+
+    medicines_without_ingredient_data = sorted(
+        set(medicine_ids) - medicines_with_ingredient_data
+    )
+
+    # Retrieve ingredient records for the selected medicines.
     statement = (
         select(
             MedicineIngredient.medicine_id,
@@ -60,7 +76,11 @@ def check_ingredient_overlap(
     rows = db.execute(statement).all()
 
     ingredient_matches = defaultdict(
-        lambda: {"name": "", "medicine_ids": [], "medicine_names": []}
+        lambda: {
+            "name": "",
+            "medicine_ids": [],
+            "medicine_names": [],
+        }
     )
 
     for row in rows:
@@ -82,11 +102,26 @@ def check_ingredient_overlap(
         if len(ingredient["medicine_ids"]) >= 2
     ]
 
+    has_overlap = bool(overlapping_ingredients)
+    has_incomplete_data = bool(medicines_without_ingredient_data)
+
+    if has_overlap:
+        result_status = "overlap_found"
+    elif has_incomplete_data:
+        result_status = "incomplete_data"
+    else:
+        result_status = "no_overlap_found"
+
     return OverlapCheckResponse(
         medicines=[
             MedicineResponse.model_validate(medicine)
             for medicine in medicines
         ],
-        has_overlap=bool(overlapping_ingredients),
+        has_overlap=has_overlap,
         overlapping_ingredients=overlapping_ingredients,
+        result_status=result_status,
+        has_incomplete_data=has_incomplete_data,
+        medicines_without_ingredient_data=(
+            medicines_without_ingredient_data
+        ),
     )

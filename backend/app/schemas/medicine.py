@@ -1,3 +1,6 @@
+
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -28,7 +31,10 @@ class OverlapCheckRequest(BaseModel):
 
     @field_validator("medicine_ids")
     @classmethod
-    def validate_unique_medicine_ids(cls, value: list[int]) -> list[int]:
+    def validate_unique_medicine_ids(
+        cls,
+        value: list[int],
+    ) -> list[int]:
         if len(value) != len(set(value)):
             raise ValueError("Medicine IDs must be unique")
         return value
@@ -45,3 +51,10 @@ class OverlapCheckResponse(BaseModel):
     medicines: list[MedicineResponse]
     has_overlap: bool
     overlapping_ingredients: list[OverlappingIngredient]
+    result_status: Literal[
+        "overlap_found",
+        "no_overlap_found",
+        "incomplete_data",
+    ]
+    has_incomplete_data: bool
+    medicines_without_ingredient_data: list[int]

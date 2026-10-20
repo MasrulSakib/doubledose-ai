@@ -1,6 +1,7 @@
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -81,42 +82,46 @@ def sample_medicines(db_session):
     unique_a = ActiveIngredient(name="test unique ingredient A")
     unique_c = ActiveIngredient(name="test unique ingredient C")
 
-    db_session.add_all([
-        medicine_a,
-        medicine_b,
-        medicine_c,
-        shared,
-        unique_a,
-        unique_c,
-    ])
+    db_session.add_all(
+        [
+            medicine_a,
+            medicine_b,
+            medicine_c,
+            shared,
+            unique_a,
+            unique_c,
+        ]
+    )
     db_session.flush()
 
-    db_session.add_all([
-        MedicineIngredient(
-            medicine_id=medicine_a.id,
-            ingredient_id=shared.id,
-            amount=100,
-            unit="mg",
-        ),
-        MedicineIngredient(
-            medicine_id=medicine_a.id,
-            ingredient_id=unique_a.id,
-            amount=25,
-            unit="mg",
-        ),
-        MedicineIngredient(
-            medicine_id=medicine_b.id,
-            ingredient_id=shared.id,
-            amount=50,
-            unit="mg",
-        ),
-        MedicineIngredient(
-            medicine_id=medicine_c.id,
-            ingredient_id=unique_c.id,
-            amount=10,
-            unit="mg",
-        ),
-    ])
+    db_session.add_all(
+        [
+            MedicineIngredient(
+                medicine_id=medicine_a.id,
+                ingredient_id=shared.id,
+                amount=100,
+                unit="mg",
+            ),
+            MedicineIngredient(
+                medicine_id=medicine_a.id,
+                ingredient_id=unique_a.id,
+                amount=25,
+                unit="mg",
+            ),
+            MedicineIngredient(
+                medicine_id=medicine_b.id,
+                ingredient_id=shared.id,
+                amount=50,
+                unit="mg",
+            ),
+            MedicineIngredient(
+                medicine_id=medicine_c.id,
+                ingredient_id=unique_c.id,
+                amount=10,
+                unit="mg",
+            ),
+        ]
+    )
 
     db_session.commit()
 
@@ -195,7 +200,9 @@ def test_detects_shared_ingredient(client, sample_medicines):
         data["overlapping_ingredients"][0]["name"]
         == "test shared ingredient"
     )
-    
+    assert data["result_status"] == "overlap_found"
+    assert data["has_incomplete_data"] is False
+
 
 def test_overlap_response_includes_medicine_display_names(
     client,
@@ -230,6 +237,68 @@ def test_overlap_response_includes_medicine_display_names(
     )
 
 
+def test_overlap_response_includes_data_status(
+    client,
+    sample_medicines,
+):
+    medicine_ids = [
+        sample_medicines["a"],
+        sample_medicines["b"],
+    ]
+
+    response = client.post(
+        "/api/v1/medicines/check-overlap",
+        json={"medicine_ids": medicine_ids},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["result_status"] == "overlap_found"
+    assert data["has_incomplete_data"] is False
+    assert data["medicines_without_ingredient_data"] == []
+
+
+def test_missing_ingredient_data_is_reported(
+    client,
+    db_session,
+    sample_medicines,
+):
+    medicine_ids = [
+        sample_medicines["a"],
+        sample_medicines["b"],
+    ]
+    medicine_without_data_id = medicine_ids[0]
+
+    db_session.execute(
+        delete(MedicineIngredient).where(
+            MedicineIngredient.medicine_id == medicine_without_data_id
+        )
+    )
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/medicines/check-overlap",
+        json={"medicine_ids": medicine_ids},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["has_incomplete_data"] is True
+    assert medicine_without_data_id in (
+        data["medicines_without_ingredient_data"]
+    )
+
+    # Medicine B still has the shared ingredient, but medicine A
+    # has no ingredient records. Therefore, no overlap can be
+    # established from the remaining data.
+    assert data["has_overlap"] is False
+    assert data["result_status"] == "incomplete_data"
+
+
 def test_returns_no_overlap_for_distinct_ingredients(
     client,
     sample_medicines,
@@ -250,6 +319,8 @@ def test_returns_no_overlap_for_distinct_ingredients(
 
     assert data["has_overlap"] is False
     assert data["overlapping_ingredients"] == []
+    assert data["result_status"] == "no_overlap_found"
+    assert data["has_incomplete_data"] is False
 
 
 def test_rejects_duplicate_medicine_ids(client):
@@ -312,7 +383,10 @@ def test_ingredient_provenance_fields_are_saved(db_session):
     assert link.source_record_id == "TEST-123"
     assert link.source_url == "https://example.com/test-record"
     assert link.retrieved_at is not None
-    assert link.retrieved_at.replace(tzinfo=timezone.utc) == retrieved_at
+    assert (
+        link.retrieved_at.replace(tzinfo=timezone.utc)
+        == retrieved_at
+    )
 
 
 def test_ingredient_provenance_fields_can_be_empty(db_session):
@@ -320,7 +394,9 @@ def test_ingredient_provenance_fields_can_be_empty(db_session):
         brand_name="Optional Provenance Test",
         generic_name="Test Compound",
     )
-    ingredient = ActiveIngredient(name="optional provenance ingredient")
+    ingredient = ActiveIngredient(
+        name="optional provenance ingredient"
+    )
 
     db_session.add_all([medicine, ingredient])
     db_session.flush()
