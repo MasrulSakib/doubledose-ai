@@ -277,3 +277,64 @@ def test_returns_404_for_unknown_medicine_ids(client):
     )
 
     assert response.status_code == 404
+
+
+def test_ingredient_provenance_fields_are_saved(db_session):
+    from datetime import datetime, timezone
+
+    medicine = Medicine(
+        brand_name="Provenance Test Medicine",
+        generic_name="Test Compound",
+    )
+    ingredient = ActiveIngredient(name="provenance test ingredient")
+
+    db_session.add_all([medicine, ingredient])
+    db_session.flush()
+
+    retrieved_at = datetime.now(timezone.utc)
+
+    link = MedicineIngredient(
+        medicine_id=medicine.id,
+        ingredient_id=ingredient.id,
+        amount=325,
+        unit="mg",
+        source_name="Test Source",
+        source_record_id="TEST-123",
+        source_url="https://example.com/test-record",
+        retrieved_at=retrieved_at,
+    )
+
+    db_session.add(link)
+    db_session.commit()
+    db_session.refresh(link)
+
+    assert link.source_name == "Test Source"
+    assert link.source_record_id == "TEST-123"
+    assert link.source_url == "https://example.com/test-record"
+    assert link.retrieved_at is not None
+    assert link.retrieved_at.replace(tzinfo=timezone.utc) == retrieved_at
+
+
+def test_ingredient_provenance_fields_can_be_empty(db_session):
+    medicine = Medicine(
+        brand_name="Optional Provenance Test",
+        generic_name="Test Compound",
+    )
+    ingredient = ActiveIngredient(name="optional provenance ingredient")
+
+    db_session.add_all([medicine, ingredient])
+    db_session.flush()
+
+    link = MedicineIngredient(
+        medicine_id=medicine.id,
+        ingredient_id=ingredient.id,
+    )
+
+    db_session.add(link)
+    db_session.commit()
+    db_session.refresh(link)
+
+    assert link.source_name is None
+    assert link.source_record_id is None
+    assert link.source_url is None
+    assert link.retrieved_at is None

@@ -33,7 +33,8 @@ def fetch_branded_medicines(
     groups = (
         response.json()
         .get("drugGroup", {})
-        .get("conceptGroup") or []
+        .get("conceptGroup")
+        or []
     )
 
     medicines = []
@@ -49,7 +50,7 @@ def fetch_branded_medicines(
             if not concept.get("rxcui") or not concept.get("name"):
                 continue
 
-            # Only accept records with an explicit trailing brand label.
+            # Accept only records with an explicit trailing brand label.
             match = re.search(r"\[([^\[\]]+)\]\s*$", concept["name"])
             if not match:
                 continue
@@ -81,7 +82,8 @@ def fetch_ingredients(
     groups = (
         response.json()
         .get("relatedGroup", {})
-        .get("conceptGroup") or []
+        .get("conceptGroup")
+        or []
     )
 
     ingredients = []
@@ -128,13 +130,22 @@ def save_medicine(
         medicine.brand_name = medicine_data["brand_name"]
         medicine.source_display_name = medicine_data["display_name"]
 
-    existing_links = set(
-        db.scalars(
-            select(MedicineIngredient.ingredient_id).where(
+    # Keep existing ORM objects so their IDs and ingredient amounts
+    # remain unchanged when source metadata is refreshed.
+    existing_links = {
+        link.ingredient_id: link
+        for link in db.scalars(
+            select(MedicineIngredient).where(
                 MedicineIngredient.medicine_id == medicine.id
             )
         ).all()
+    }
+
+    source_record_id = medicine_data["rxcui"]
+    source_url = (
+        f"{BASE_URL}/rxcui/{source_record_id}/related.json?tty=IN"
     )
+    retrieved_at = datetime.now(timezone.utc)
 
     for ingredient_data in ingredients:
         ingredient = db.scalar(
@@ -144,8 +155,8 @@ def save_medicine(
         )
 
         if ingredient is None:
-            # Reuse an existing same-name ingredient only when its
-            # source identifier is absent or matches.
+            # Reuse a same-name ingredient only when its source ID
+            # is absent or matches the incoming RxNorm identifier.
             ingredient = db.scalar(
                 select(ActiveIngredient).where(
                     ActiveIngredient.name == ingredient_data["name"]
@@ -155,7 +166,8 @@ def save_medicine(
             if ingredient is not None:
                 if (
                     ingredient.rxnorm_rxcui is not None
-                    and ingredient.rxnorm_rxcui != ingredient_data["rxcui"]
+                    and ingredient.rxnorm_rxcui
+                    != ingredient_data["rxcui"]
                 ):
                     raise ValueError(
                         "Ingredient name conflicts with a different "
@@ -171,25 +183,30 @@ def save_medicine(
                 db.add(ingredient)
                 db.flush()
 
-        if ingredient.id in existing_links:
+        existing_link = existing_links.get(ingredient.id)
+
+        if existing_link is not None:
+            # Refresh provenance without replacing the link or
+            # overwriting its existing amount and unit.
+            existing_link.source_name = SOURCE_NAME
+            existing_link.source_record_id = source_record_id
+            existing_link.source_url = source_url
+            existing_link.retrieved_at = retrieved_at
             continue
 
-        db.add(
-            MedicineIngredient(
-                medicine_id=medicine.id,
-                ingredient_id=ingredient.id,
-                amount=None,
-                unit=None,
-                source_name=SOURCE_NAME,
-                source_record_id=medicine_data["rxcui"],
-                source_url=(
-                    f"{BASE_URL}/rxcui/"
-                    f"{medicine_data['rxcui']}/related.json?tty=IN"
-                ),
-                retrieved_at=datetime.now(timezone.utc),
-            )
+        link = MedicineIngredient(
+            medicine_id=medicine.id,
+            ingredient_id=ingredient.id,
+            amount=None,
+            unit=None,
+            source_name=SOURCE_NAME,
+            source_record_id=source_record_id,
+            source_url=source_url,
+            retrieved_at=retrieved_at,
         )
-        existing_links.add(ingredient.id)
+
+        db.add(link)
+        existing_links[ingredient.id] = link
 
     return medicine_data["rxcui"]
 
@@ -225,7 +242,10 @@ def main() -> None:
             records = []
 
             for medicine in medicines:
-                ingredients = fetch_ingredients(client, medicine["rxcui"])
+                ingredients = fetch_ingredients(
+                    client,
+                    medicine["rxcui"],
+                )
 
                 if not ingredients:
                     print(
