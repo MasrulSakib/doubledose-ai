@@ -5,3 +5,5 @@ venv/
 pycache/
 *.py[cod]
 __pycache__/
+mlflow.db
+mlruns/
