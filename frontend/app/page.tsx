@@ -16,6 +16,7 @@ import type {
 } from "@/types/ai-explanation";
 import type { MatcherCompareResponse } from "@/types/matcher";
 import type { OCRMedicineMatch } from "@/types/ocr";
+import Image from "next/image";
 
 type Medicine = {
   id: number;
@@ -543,18 +544,23 @@ export default function Home() {
 
               {ocrPreviewUrl && (
                 <div className="ocr-preview">
-                  <img
+                  <Image
                     src={ocrPreviewUrl}
                     alt="Preview of the selected medicine packaging"
+                    width={800}
+                    height={600}
+                    unoptimized
                     style={{
                       display: "block",
                       width: "100%",
                       maxHeight: "240px",
+                      height: "auto",
                       objectFit: "contain",
                       borderRadius: "12px",
                       marginTop: "12px",
                     }}
                   />
+
                   <p className="search-hint">{ocrFile?.name}</p>
                 </div>
               )}
