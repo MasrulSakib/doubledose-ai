@@ -50,14 +50,33 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
+
 function medicineLabel(medicine: Medicine): string {
   return (
-    medicine.source_display_name ||
     medicine.brand_name ||
     medicine.generic_name ||
     `Medicine ${medicine.id}`
   );
 }
+
+function medicineStrength(medicine: Medicine): string | null {
+  const match = medicine.source_display_name?.match(
+    /\|\s*Strength:\s*(.*?)\s*\|/i,
+  );
+
+  return match?.[1]?.trim() || null;
+}
+
+function medicineDetails(medicine: Medicine): string {
+  return [
+    medicineStrength(medicine),
+    medicine.dosage_form,
+    medicine.manufacturer,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -407,11 +426,8 @@ export default function Home() {
 
                       <span className="medicine-result-copy">
                         <strong>{medicineLabel(medicine)}</strong>
-                        <span>
-                          {medicine.generic_name ||
-                            medicine.dosage_form ||
-                            "Medicine record"}
-                        </span>
+                        <span>{medicine.generic_name || "Generic name unavailable"}</span>
+                        <span>{medicineDetails(medicine) || "Details unavailable"}</span>
                       </span>
 
                       <span className="add-symbol">
@@ -462,11 +478,8 @@ export default function Home() {
 
                     <span className="medicine-result-copy">
                       <strong>{medicineLabel(medicine)}</strong>
-                      <span>
-                        {medicine.generic_name ||
-                          medicine.dosage_form ||
-                          "Medicine record"}
-                      </span>
+                      <span>{medicine.generic_name || "Generic name unavailable"}</span>
+                      <span>{medicineDetails(medicine) || "Details unavailable"}</span>
                     </span>
 
                     <button
