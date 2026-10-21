@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -6,13 +7,14 @@ import { useEffect, useState } from "react";
 import AIExplanationCard from "@/components/medicines/ai-explanation-card";
 import { explainOverlap } from "@/lib/ai-api";
 import {
+  compareMedicineMatchers,
   extractMedicineText,
-  matchMedicinesFromText,
 } from "@/lib/ocr-api";
 import type {
   AIExplanationRequest,
   AIExplanationResponse,
 } from "@/types/ai-explanation";
+import type { MatcherCompareResponse } from "@/types/matcher";
 import type { OCRMedicineMatch } from "@/types/ocr";
 
 type Medicine = {
@@ -38,6 +40,11 @@ type OverlapResult = {
   result_status: "overlap_found" | "no_overlap_found" | "incomplete_data";
   has_incomplete_data: boolean;
   medicines_without_ingredient_data: number[];
+};
+
+type MatcherSection = {
+  name: "RapidFuzz" | "TF-IDF";
+  candidates: OCRMedicineMatch[];
 };
 
 async function readError(response: Response): Promise<string> {
@@ -86,6 +93,29 @@ function medicineDetails(medicine: Medicine): string {
     .join(" · ");
 }
 
+function candidateStrength(candidate: OCRMedicineMatch): string | null {
+  const match = candidate.strength?.match(
+    /\|\s*Strength:\s*(.*?)\s*\|/i,
+  );
+
+  return match?.[1]?.trim() || null;
+}
+
+function matcherSections(
+  comparison: MatcherCompareResponse,
+): MatcherSection[] {
+  return [
+    {
+      name: "RapidFuzz",
+      candidates: comparison.rapidfuzz ?? [],
+    },
+    {
+      name: "TF-IDF",
+      candidates: comparison.tfidf ?? [],
+    },
+  ];
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Medicine[]>([]);
@@ -102,15 +132,15 @@ export default function Home() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // OCR upload and matching state.
+  // OCR upload and matcher comparison state.
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrPreviewUrl, setOcrPreviewUrl] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [ocrText, setOcrText] = useState("");
-  const [ocrCandidates, setOcrCandidates] = useState<OCRMedicineMatch[]>([]);
+  const [matcherComparison, setMatcherComparison] =
+    useState<MatcherCompareResponse | null>(null);
   const [ocrMessage, setOcrMessage] = useState("");
-
 
   useEffect(() => {
     return () => {
@@ -214,7 +244,7 @@ export default function Home() {
 
     setOcrError("");
     setOcrText("");
-    setOcrCandidates([]);
+    setMatcherComparison(null);
     setOcrMessage("");
     setOcrPreviewUrl(null);
 
@@ -240,6 +270,25 @@ export default function Home() {
     }
 
     setOcrFile(file);
+    setOcrPreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function runMatcherComparison(text: string) {
+    const comparison = await compareMedicineMatchers({
+      extracted_text: text,
+      limit: 10,
+    });
+
+    setMatcherComparison(comparison);
+
+    const rapidfuzzCount = comparison.rapidfuzz?.length ?? 0;
+    const tfidfCount = comparison.tfidf?.length ?? 0;
+
+    setOcrMessage(
+      rapidfuzzCount || tfidfCount
+        ? `Found ${rapidfuzzCount} RapidFuzz and ${tfidfCount} TF-IDF candidates. Review the results and confirm the correct medicine.`
+        : "Text was extracted, but neither matcher found likely candidates. Try editing the text or searching manually.",
+    );
   }
 
   async function processOCR() {
@@ -248,7 +297,7 @@ export default function Home() {
     setOcrLoading(true);
     setOcrError("");
     setOcrText("");
-    setOcrCandidates([]);
+    setMatcherComparison(null);
     setOcrMessage("");
 
     try {
@@ -263,17 +312,7 @@ export default function Home() {
         return;
       }
 
-      const matching = await matchMedicinesFromText({
-        extracted_text: extraction.extracted_text,
-        limit: 10,
-      });
-
-      setOcrCandidates(matching.matches ?? []);
-      setOcrMessage(
-        matching.matches?.length
-          ? `${matching.matches.length} possible medicine match${matching.matches.length === 1 ? "" : "es"} found. Confirm the correct medicine before adding it.`
-          : "Text was extracted, but no likely medicine matches were found. You can search by name manually.",
-      );
+      await runMatcherComparison(extraction.extracted_text);
     } catch (error) {
       setOcrError(
         error instanceof Error
@@ -286,7 +325,7 @@ export default function Home() {
   }
 
   function addOCRCandidate(candidate: OCRMedicineMatch) {
-    // The backend's current strength field contains source_display_name.
+    // The backend currently returns source_display_name in the strength field.
     const medicine: Medicine = {
       id: candidate.medicine_id,
       brand_name: candidate.brand_name,
@@ -302,26 +341,16 @@ export default function Home() {
 
     setOcrLoading(true);
     setOcrError("");
-    setOcrCandidates([]);
+    setMatcherComparison(null);
     setOcrMessage("");
 
     try {
-      const matching = await matchMedicinesFromText({
-        extracted_text: ocrText,
-        limit: 10,
-      });
-
-      setOcrCandidates(matching.matches ?? []);
-      setOcrMessage(
-        matching.matches?.length
-          ? `${matching.matches.length} possible match(es) found. Confirm before adding.`
-          : "No likely matches found. Try correcting the extracted text or search manually.",
-      );
+      await runMatcherComparison(ocrText.trim());
     } catch (error) {
       setOcrError(
         error instanceof Error
           ? error.message
-          : "Unable to match the edited text.",
+          : "Unable to compare the edited text.",
       );
     } finally {
       setOcrLoading(false);
@@ -544,7 +573,7 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    Extract text and find medicines
+                    Extract text and compare matchers
                     <span aria-hidden="true">→</span>
                   </>
                 )}
@@ -585,62 +614,95 @@ export default function Home() {
                     disabled={ocrLoading || !ocrText.trim()}
                     style={{ marginTop: "8px" }}
                   >
-                    {ocrLoading ? "Matching…" : "Match edited text"}
+                    {ocrLoading ? "Comparing…" : "Compare edited text"}
                   </button>
                 </details>
               )}
 
-              {ocrCandidates.length > 0 && (
-                <div className="search-results" style={{ marginTop: "16px" }}>
-                  <div className="results-label">
-                    POSSIBLE MATCHES — CONFIRM BEFORE ADDING
-                  </div>
-
-                  {ocrCandidates.map((candidate) => {
-                    const alreadySelected = selected.some(
-                      (item) => item.id === candidate.medicine_id,
-                    );
-                    const cannotAdd = selected.length >= 5 || alreadySelected;
-
-                    return (
-                      <div
-                        className="search-result"
-                        key={candidate.medicine_id}
-                      >
-                        <span className="medicine-symbol">Rx</span>
-
-                        <span className="medicine-result-copy">
-                          <strong>{candidate.brand_name}</strong>
-                          <span>
-                            {candidate.generic_name || "Generic name unavailable"}
-                          </span>
-                          <span>
-                            Text similarity score: {candidate.match_score.toFixed(1)}%
-                          </span>
-                          <span>Not verified — confirm the medicine packaging.</span>
-                        </span>
-
-                        <button
-                          className="add-symbol"
-                          type="button"
-                          onClick={() => addOCRCandidate(candidate)}
-                          disabled={cannotAdd}
-                          aria-label={`Add ${candidate.brand_name} to comparison`}
-                          title={
-                            alreadySelected
-                              ? "Already selected"
-                              : selected.length >= 5
-                                ? "Maximum of five medicines reached"
-                                : "Confirm and add this medicine"
-                          }
-                        >
-                          {alreadySelected ? "✓" : "+"}
-                        </button>
+              {matcherComparison &&
+                matcherSections(matcherComparison).map(
+                  ({ name, candidates }) => (
+                    <div
+                      className="search-results"
+                      style={{ marginTop: "16px" }}
+                      key={name}
+                    >
+                      <div className="results-label">
+                        {name.toUpperCase()} MATCHES
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+
+                      {candidates.length === 0 ? (
+                        <p className="search-hint">
+                          No candidates returned by this matcher.
+                        </p>
+                      ) : (
+                        candidates.map((candidate) => {
+                          const alreadySelected = selected.some(
+                            (item) => item.id === candidate.medicine_id,
+                          );
+
+                          const cannotAdd =
+                            selected.length >= 5 || alreadySelected;
+
+                          const lowConfidence =
+                            candidate.match_score < 65;
+
+                          const strength = candidateStrength(candidate);
+
+                          return (
+                            <div
+                              className="search-result"
+                              key={`${name}-${candidate.medicine_id}`}
+                            >
+                              <span className="medicine-symbol">Rx</span>
+
+                              <span className="medicine-result-copy">
+                                <strong>{candidate.brand_name}</strong>
+
+                                <span>
+                                  {candidate.generic_name ||
+                                    "Generic name unavailable"}
+                                </span>
+
+                                {strength && (
+                                  <span>Strength: {strength}</span>
+                                )}
+
+                                <span>
+                                  Similarity score:{" "}
+                                  {candidate.match_score.toFixed(1)}%
+                                </span>
+
+                                <span>
+                                  {lowConfidence
+                                    ? "Low score — verify the packaging carefully."
+                                    : "Possible match — verify the packaging before adding."}
+                                </span>
+                              </span>
+
+                              <button
+                                className="add-symbol"
+                                type="button"
+                                onClick={() => addOCRCandidate(candidate)}
+                                disabled={cannotAdd}
+                                aria-label={`Confirm and add ${candidate.brand_name}`}
+                                title={
+                                  alreadySelected
+                                    ? "Already selected"
+                                    : selected.length >= 5
+                                      ? "Maximum of five medicines reached"
+                                      : "Confirm and add this medicine"
+                                }
+                              >
+                                {alreadySelected ? "✓" : "+"}
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ),
+                )}
             </div>
 
             <div className="search-divider" style={{ margin: "20px 0" }}>
@@ -719,7 +781,8 @@ export default function Home() {
                       <span className="medicine-result-copy">
                         <strong>{medicineLabel(medicine)}</strong>
                         <span>
-                          {medicine.generic_name || "Generic name unavailable"}
+                          {medicine.generic_name ||
+                            "Generic name unavailable"}
                         </span>
                         <span>
                           {medicineDetails(medicine) || "Details unavailable"}
@@ -772,7 +835,8 @@ export default function Home() {
                     <span className="medicine-result-copy">
                       <strong>{medicineLabel(medicine)}</strong>
                       <span>
-                        {medicine.generic_name || "Generic name unavailable"}
+                        {medicine.generic_name ||
+                          "Generic name unavailable"}
                       </span>
                       <span>
                         {medicineDetails(medicine) || "Details unavailable"}

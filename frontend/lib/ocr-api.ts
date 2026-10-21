@@ -4,6 +4,11 @@ import type {
   OCRMatchResponse,
 } from "@/types/ocr";
 
+import type {
+  MatcherCompareRequest,
+  MatcherCompareResponse,
+} from "@/types/matcher";
+
 async function readErrorMessage(
   response: Response,
   fallback: string,
@@ -67,4 +72,27 @@ export async function matchMedicinesFromText(
   }
 
   return (await response.json()) as OCRMatchResponse;
+}
+
+export async function compareMedicineMatchers(
+  payload: MatcherCompareRequest,
+): Promise<MatcherCompareResponse> {
+  const response = await fetch("/api/matcher/compare", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(
+        response,
+        "Unable to compare medicine matching methods.",
+      ),
+    );
+  }
+
+  return (await response.json()) as MatcherCompareResponse;
 }
