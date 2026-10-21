@@ -1,5 +1,5 @@
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.medicine import Medicine
@@ -10,22 +10,37 @@ def search_medicines(
     query: str,
     limit: int = 20,
 ) -> list[Medicine]:
-    """Search medicines by brand name or generic name."""
+    """Search medicines with brand-name matches prioritized."""
+
     search_term = query.strip()
 
     if not search_term:
         return []
 
+    exact_pattern = search_term
+    prefix_pattern = f"{search_term}%"
+    contains_pattern = f"%{search_term}%"
+
     statement = (
         select(Medicine)
         .where(
             or_(
-                Medicine.brand_name.ilike(f"%{search_term}%"),
-                Medicine.generic_name.ilike(f"%{search_term}%"),
-                Medicine.source_display_name.ilike(f"%{query}%"),
+                Medicine.brand_name.ilike(contains_pattern),
+                Medicine.generic_name.ilike(contains_pattern),
+                Medicine.source_display_name.ilike(contains_pattern),
             )
         )
-        .order_by(Medicine.brand_name)
+        .order_by(
+            case(
+                (Medicine.brand_name.ilike(exact_pattern), 0),
+                (Medicine.brand_name.ilike(prefix_pattern), 1),
+                (Medicine.generic_name.ilike(exact_pattern), 2),
+                (Medicine.generic_name.ilike(prefix_pattern), 3),
+                else_=4,
+            ),
+            Medicine.brand_name,
+            Medicine.id,
+        )
         .limit(limit)
     )
 
