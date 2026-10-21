@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -6,10 +5,15 @@ import { useEffect, useState } from "react";
 
 import AIExplanationCard from "@/components/medicines/ai-explanation-card";
 import { explainOverlap } from "@/lib/ai-api";
+import {
+  extractMedicineText,
+  matchMedicinesFromText,
+} from "@/lib/ocr-api";
 import type {
   AIExplanationRequest,
   AIExplanationResponse,
 } from "@/types/ai-explanation";
+import type { OCRMedicineMatch } from "@/types/ocr";
 
 type Medicine = {
   id: number;
@@ -38,18 +42,23 @@ type OverlapResult = {
 
 async function readError(response: Response): Promise<string> {
   try {
-    const data = await response.json();
+    const data: unknown = await response.json();
 
-    return (
-      data.detail ??
-      data.message ??
-      "Something went wrong. Please try again."
-    );
+    if (typeof data === "object" && data !== null) {
+      if ("detail" in data && typeof data.detail === "string") {
+        return data.detail;
+      }
+
+      if ("message" in data && typeof data.message === "string") {
+        return data.message;
+      }
+    }
+
+    return "Something went wrong. Please try again.";
   } catch {
     return "Something went wrong. Please try again.";
   }
 }
-
 
 function medicineLabel(medicine: Medicine): string {
   return (
@@ -77,7 +86,6 @@ function medicineDetails(medicine: Medicine): string {
     .join(" · ");
 }
 
-
 export default function Home() {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Medicine[]>([]);
@@ -94,8 +102,25 @@ export default function Home() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Search the medicine database with a short debounce.
+  // OCR upload and matching state.
+  const [ocrFile, setOcrFile] = useState<File | null>(null);
+  const [ocrPreviewUrl, setOcrPreviewUrl] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrText, setOcrText] = useState("");
+  const [ocrCandidates, setOcrCandidates] = useState<OCRMedicineMatch[]>([]);
+  const [ocrMessage, setOcrMessage] = useState("");
 
+
+  useEffect(() => {
+    return () => {
+      if (ocrPreviewUrl) {
+        URL.revokeObjectURL(ocrPreviewUrl);
+      }
+    };
+  }, [ocrPreviewUrl]);
+
+  // Search the medicine database with a short debounce.
   useEffect(() => {
     const trimmedQuery = query.trim();
 
@@ -119,12 +144,15 @@ export default function Home() {
           throw new Error(await readError(response));
         }
 
-        const data = await response.json();
+        const data: unknown = await response.json();
 
         const medicines: Medicine[] = Array.isArray(data)
           ? data
-          : Array.isArray(data.items)
-            ? data.items
+          : typeof data === "object" &&
+            data !== null &&
+            "items" in data &&
+            Array.isArray(data.items)
+            ? (data.items as Medicine[])
             : [];
 
         if (!cancelled) {
@@ -151,7 +179,6 @@ export default function Home() {
       window.clearTimeout(timer);
     };
   }, [query]);
-
 
   function resetResults() {
     setResult(null);
@@ -180,7 +207,127 @@ export default function Home() {
     resetResults();
   }
 
-  // Compare the selected medicines, then request an AI explanation.
+  function handleOCRFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+
+    setOcrError("");
+    setOcrText("");
+    setOcrCandidates([]);
+    setOcrMessage("");
+    setOcrPreviewUrl(null);
+
+    if (!file) {
+      setOcrFile(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      setOcrFile(null);
+      setOcrError("Please select a JPEG, PNG, or WebP image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setOcrFile(null);
+      setOcrError("The image must be 10 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+
+    setOcrFile(file);
+  }
+
+  async function processOCR() {
+    if (!ocrFile || ocrLoading) return;
+
+    setOcrLoading(true);
+    setOcrError("");
+    setOcrText("");
+    setOcrCandidates([]);
+    setOcrMessage("");
+
+    try {
+      const extraction = await extractMedicineText(ocrFile);
+      setOcrText(extraction.extracted_text);
+
+      if (!extraction.text_found || !extraction.extracted_text.trim()) {
+        setOcrMessage(
+          extraction.message ||
+          "No readable text found. Try a clearer photo or search manually.",
+        );
+        return;
+      }
+
+      const matching = await matchMedicinesFromText({
+        extracted_text: extraction.extracted_text,
+        limit: 10,
+      });
+
+      setOcrCandidates(matching.matches ?? []);
+      setOcrMessage(
+        matching.matches?.length
+          ? `${matching.matches.length} possible medicine match${matching.matches.length === 1 ? "" : "es"} found. Confirm the correct medicine before adding it.`
+          : "Text was extracted, but no likely medicine matches were found. You can search by name manually.",
+      );
+    } catch (error) {
+      setOcrError(
+        error instanceof Error
+          ? error.message
+          : "Unable to process this image. Please try again.",
+      );
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
+  function addOCRCandidate(candidate: OCRMedicineMatch) {
+    // The backend's current strength field contains source_display_name.
+    const medicine: Medicine = {
+      id: candidate.medicine_id,
+      brand_name: candidate.brand_name,
+      generic_name: candidate.generic_name,
+      source_display_name: candidate.strength,
+    };
+
+    addMedicine(medicine);
+  }
+
+  async function rematchEditedOCRText() {
+    if (!ocrText.trim() || ocrLoading) return;
+
+    setOcrLoading(true);
+    setOcrError("");
+    setOcrCandidates([]);
+    setOcrMessage("");
+
+    try {
+      const matching = await matchMedicinesFromText({
+        extracted_text: ocrText,
+        limit: 10,
+      });
+
+      setOcrCandidates(matching.matches ?? []);
+      setOcrMessage(
+        matching.matches?.length
+          ? `${matching.matches.length} possible match(es) found. Confirm before adding.`
+          : "No likely matches found. Try correcting the extracted text or search manually.",
+      );
+    } catch (error) {
+      setOcrError(
+        error instanceof Error
+          ? error.message
+          : "Unable to match the edited text.",
+      );
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
   async function checkOverlap() {
     if (selected.length < 2 || selected.length > 5) return;
 
@@ -206,7 +353,6 @@ export default function Home() {
 
       const data: OverlapResult = await response.json();
 
-      // Show the deterministic comparison before requesting AI.
       setResult(data);
       setChecking(false);
       setAiLoading(true);
@@ -258,11 +404,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <Link
-          className="brand"
-          href="/"
-          aria-label="DoubleDose AI home"
-        >
+        <Link className="brand" href="/" aria-label="DoubleDose AI home">
           <span className="brand-mark">
             D<span>+</span>
           </span>
@@ -334,7 +476,7 @@ export default function Home() {
           <div>
             <div className="section-kicker">LET’S GET STARTED</div>
             <h2>Compare your medicines</h2>
-            <p>Search for a medicine, then add it to your comparison.</p>
+            <p>Search for a medicine or upload a photo of its packaging.</p>
           </div>
 
           <div className="selection-count">
@@ -348,8 +490,161 @@ export default function Home() {
               <span className="step-number">01</span>
               <div>
                 <h3>Find medicines</h3>
-                <p>Search by medicine or brand name.</p>
+                <p>Search by name or identify medicines from a photo.</p>
               </div>
+            </div>
+
+            <div className="ocr-upload-section">
+              <label className="search-label" htmlFor="medicine-photo">
+                Upload medicine photo
+              </label>
+
+              <input
+                id="medicine-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleOCRFileChange}
+                disabled={ocrLoading}
+              />
+
+              <p className="search-hint">
+                Upload a clear photo of a medicine strip or box. JPEG, PNG,
+                and WebP images up to 10 MB are supported.
+              </p>
+
+              {ocrPreviewUrl && (
+                <div className="ocr-preview">
+                  <img
+                    src={ocrPreviewUrl}
+                    alt="Preview of the selected medicine packaging"
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      maxHeight: "240px",
+                      objectFit: "contain",
+                      borderRadius: "12px",
+                      marginTop: "12px",
+                    }}
+                  />
+                  <p className="search-hint">{ocrFile?.name}</p>
+                </div>
+              )}
+
+              <button
+                className="primary-button"
+                type="button"
+                onClick={processOCR}
+                disabled={!ocrFile || ocrLoading}
+                style={{ marginTop: "12px", width: "100%" }}
+              >
+                {ocrLoading ? (
+                  <>
+                    <span className="button-spinner" />
+                    Reading medicine photo…
+                  </>
+                ) : (
+                  <>
+                    Extract text and find medicines
+                    <span aria-hidden="true">→</span>
+                  </>
+                )}
+              </button>
+
+              {ocrError && (
+                <div className="inline-error" role="alert">
+                  {ocrError}
+                </div>
+              )}
+
+              {ocrMessage && (
+                <div className="search-hint" aria-live="polite">
+                  {ocrMessage}
+                </div>
+              )}
+
+              {ocrText && (
+                <details style={{ marginTop: "12px" }}>
+                  <summary>Review extracted text</summary>
+                  <textarea
+                    aria-label="Extracted text from medicine photo"
+                    value={ocrText}
+                    onChange={(event) => setOcrText(event.target.value)}
+                    rows={5}
+                    style={{
+                      width: "100%",
+                      marginTop: "8px",
+                      padding: "10px",
+                      borderRadius: "8px",
+                      font: "inherit",
+                    }}
+                  />
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={rematchEditedOCRText}
+                    disabled={ocrLoading || !ocrText.trim()}
+                    style={{ marginTop: "8px" }}
+                  >
+                    {ocrLoading ? "Matching…" : "Match edited text"}
+                  </button>
+                </details>
+              )}
+
+              {ocrCandidates.length > 0 && (
+                <div className="search-results" style={{ marginTop: "16px" }}>
+                  <div className="results-label">
+                    POSSIBLE MATCHES — CONFIRM BEFORE ADDING
+                  </div>
+
+                  {ocrCandidates.map((candidate) => {
+                    const alreadySelected = selected.some(
+                      (item) => item.id === candidate.medicine_id,
+                    );
+                    const cannotAdd = selected.length >= 5 || alreadySelected;
+
+                    return (
+                      <div
+                        className="search-result"
+                        key={candidate.medicine_id}
+                      >
+                        <span className="medicine-symbol">Rx</span>
+
+                        <span className="medicine-result-copy">
+                          <strong>{candidate.brand_name}</strong>
+                          <span>
+                            {candidate.generic_name || "Generic name unavailable"}
+                          </span>
+                          <span>
+                            Text similarity score: {candidate.match_score.toFixed(1)}%
+                          </span>
+                          <span>Not verified — confirm the medicine packaging.</span>
+                        </span>
+
+                        <button
+                          className="add-symbol"
+                          type="button"
+                          onClick={() => addOCRCandidate(candidate)}
+                          disabled={cannotAdd}
+                          aria-label={`Add ${candidate.brand_name} to comparison`}
+                          title={
+                            alreadySelected
+                              ? "Already selected"
+                              : selected.length >= 5
+                                ? "Maximum of five medicines reached"
+                                : "Confirm and add this medicine"
+                          }
+                        >
+                          {alreadySelected ? "✓" : "+"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="search-divider" style={{ margin: "20px 0" }}>
+              <span>OR SEARCH MANUALLY</span>
             </div>
 
             <label className="search-label" htmlFor="medicine-search">
@@ -364,10 +659,8 @@ export default function Home() {
               <input
                 id="medicine-search"
                 value={query}
-
                 onChange={(event) => {
                   const value = event.target.value;
-
                   setQuery(value);
 
                   if (value.trim().length < 2) {
@@ -376,8 +669,7 @@ export default function Home() {
                     setSearchError("");
                   }
                 }}
-
-                placeholder="e.g. acetaminophen"
+                placeholder="e.g. A-Cof"
                 autoComplete="off"
               />
 
@@ -426,8 +718,12 @@ export default function Home() {
 
                       <span className="medicine-result-copy">
                         <strong>{medicineLabel(medicine)}</strong>
-                        <span>{medicine.generic_name || "Generic name unavailable"}</span>
-                        <span>{medicineDetails(medicine) || "Details unavailable"}</span>
+                        <span>
+                          {medicine.generic_name || "Generic name unavailable"}
+                        </span>
+                        <span>
+                          {medicineDetails(medicine) || "Details unavailable"}
+                        </span>
                       </span>
 
                       <span className="add-symbol">
@@ -468,18 +764,19 @@ export default function Home() {
             ) : (
               <div className="selected-list">
                 {selected.map((medicine, index) => (
-                  <div
-                    className="selected-medicine"
-                    key={medicine.id}
-                  >
+                  <div className="selected-medicine" key={medicine.id}>
                     <span className="selected-index">
                       {String(index + 1).padStart(2, "0")}
                     </span>
 
                     <span className="medicine-result-copy">
                       <strong>{medicineLabel(medicine)}</strong>
-                      <span>{medicine.generic_name || "Generic name unavailable"}</span>
-                      <span>{medicineDetails(medicine) || "Details unavailable"}</span>
+                      <span>
+                        {medicine.generic_name || "Generic name unavailable"}
+                      </span>
+                      <span>
+                        {medicineDetails(medicine) || "Details unavailable"}
+                      </span>
                     </span>
 
                     <button
@@ -560,9 +857,7 @@ export default function Home() {
               <div className="result-summary summary-warning">
                 <span className="summary-icon">!</span>
                 <div>
-                  <strong>
-                    One or more shared ingredients were found.
-                  </strong>
+                  <strong>One or more shared ingredients were found.</strong>
                   <p>
                     Review the ingredients below with a pharmacist or
                     healthcare professional before making medicine decisions.
