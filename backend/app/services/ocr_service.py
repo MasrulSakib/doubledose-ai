@@ -3,20 +3,29 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 
 import pytesseract
 from PIL import Image
 
 
 # Allow configuration for local development and deployment.
-tesseract_path = os.getenv("TESSERACT_CMD")
+# Prefer a valid explicit path, then discover Tesseract on the system PATH.
+tesseract_path = os.getenv("TESSERACT_CMD", "").strip()
 
-if tesseract_path:
+if tesseract_path and (
+    os.path.isfile(tesseract_path) or shutil.which(tesseract_path)
+):
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
-elif os.name == "nt":
-    windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    if os.path.exists(windows_path):
-        pytesseract.pytesseract.tesseract_cmd = windows_path
+else:
+    detected_path = shutil.which("tesseract")
+
+    if detected_path:
+        pytesseract.pytesseract.tesseract_cmd = detected_path
+    elif os.name == "nt":
+        windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+        if os.path.isfile(windows_path):
+            pytesseract.pytesseract.tesseract_cmd = windows_path
 
 
 OCR_CONFIGS = (
