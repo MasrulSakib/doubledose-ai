@@ -18,35 +18,48 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   targetUrl.search = request.nextUrl.search;
 
   const headers = new Headers();
-
   const contentType = request.headers.get("content-type");
+
   if (contentType) {
     headers.set("content-type", contentType);
   }
 
   try {
+    const isReadOnlyRequest =
+      request.method === "GET" || request.method === "HEAD";
+
+    // Preserve the original binary data for multipart uploads.
+    const body = isReadOnlyRequest
+      ? undefined
+      : contentType?.includes("multipart/form-data")
+        ? await request.arrayBuffer()
+        : await request.text();
+
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : await request.text(),
+      body,
       cache: "no-store",
     });
 
+    const responseHeaders = new Headers();
+    const responseContentType = response.headers.get("content-type");
+
+    if (responseContentType) {
+      responseHeaders.set("content-type", responseContentType);
+    }
+
     return new Response(response.body, {
       status: response.status,
-      headers: {
-        "content-type":
-          response.headers.get("content-type") ?? "application/json",
-      },
+      headers: responseHeaders,
     });
-  } catch {
+  } catch (error) {
+    console.error("Backend proxy request failed:", error);
+
     return Response.json(
       {
         detail:
-          "Could not connect to the backend. Make sure FastAPI is running.",
+          "Could not connect to the backend. Check the backend URL and availability.",
       },
       { status: 502 },
     );
