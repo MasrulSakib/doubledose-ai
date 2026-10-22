@@ -1,11 +1,7 @@
-
 import re
 from functools import lru_cache
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy.orm import Session
-
+from sklearn.metrics.pairwise import cosine_similarity
 from app.models.medicine import Medicine
 
 
@@ -14,15 +10,15 @@ MIN_MATCH_SCORE = 0.20
 
 
 def normalize_text(text: str) -> str:
-    """Normalize OCR text and medicine brand names for matching."""
     text = text.lower()
     text = re.sub(r"[^a-z0-9\s.+-]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
 @lru_cache(maxsize=1)
-def get_vectorizer() -> TfidfVectorizer:
-    """Create a character n-gram vectorizer robust to OCR spelling errors."""
+def get_vectorizer():
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
     return TfidfVectorizer(
         analyzer="char_wb",
         ngram_range=(2, 5),
@@ -36,7 +32,6 @@ def match_medicines_tfidf(
     extracted_text: str,
     limit: int = 10,
 ) -> list[dict]:
-    """Rank medicine brands using character-level TF-IDF similarity."""
     normalized_ocr = normalize_text(extracted_text)
 
     if not normalized_ocr:

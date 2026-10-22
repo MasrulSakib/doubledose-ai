@@ -4,8 +4,6 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from ultralytics import YOLO
-
 
 _model = None
 _model_path_loaded = None
@@ -27,6 +25,8 @@ def detect_label_crops(image: Image.Image) -> list[Image.Image]:
 
     try:
         if _model is None or _model_path_loaded != model_path:
+            from ultralytics import YOLO
+
             _model = YOLO(model_path)
             _model_path_loaded = model_path
 
@@ -37,7 +37,7 @@ def detect_label_crops(image: Image.Image) -> list[Image.Image]:
             verbose=False,
         )
 
-        crops = []
+        crops: list[Image.Image] = []
 
         for result in results:
             if result.boxes is None:

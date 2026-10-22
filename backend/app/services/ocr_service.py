@@ -1,9 +1,9 @@
 
+from __future__ import annotations
+
 import os
 import re
 
-import cv2
-import numpy as np
 import pytesseract
 from PIL import Image
 
@@ -42,8 +42,11 @@ STRENGTH_PATTERN = re.compile(
 )
 
 
-def _preprocess_image(image: Image.Image) -> list[np.ndarray]:
+def _preprocess_image(image: Image.Image) -> list:
     """Generate image variants for printed medicine text."""
+    import cv2
+    import numpy as np
+
     rgb = np.asarray(image.convert("RGB"))
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
 
@@ -87,7 +90,7 @@ def _preprocess_image(image: Image.Image) -> list[np.ndarray]:
 
 
 def _extract_candidate(
-    image: np.ndarray,
+    image,
     config: str,
 ) -> tuple[str, float]:
     """Extract text and calculate average confidence for recognized words."""
