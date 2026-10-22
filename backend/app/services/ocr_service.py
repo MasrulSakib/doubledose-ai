@@ -31,8 +31,6 @@ else:
 OCR_CONFIGS = (
     "--oem 3 --psm 6",
     "--oem 3 --psm 11",
-    "--oem 3 --psm 12",
-    "--oem 3 --psm 3",
 )
 
 MEDICINE_TERMS = (
@@ -95,7 +93,7 @@ def _preprocess_image(image: Image.Image) -> list:
         11,
     )
 
-    return [gray, contrast, sharpened, thresholded]
+    return [gray, thresholded]
 
 
 def _extract_candidate(
