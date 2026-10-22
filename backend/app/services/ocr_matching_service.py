@@ -211,46 +211,55 @@ def _dosage_form_score(
 
     return -10.0
 
-
 def _brand_match_score(
     normalized_ocr: str,
     brand_name: str,
 ) -> float:
-    """Score brand evidence without automatically granting a perfect score."""
+    """Score brand evidence conservatively when OCR text is noisy."""
     normalized_brand = normalize_text(brand_name)
 
     if not normalized_brand:
         return 0.0
 
-    # Exact brand phrase is strong evidence, but not sufficient by itself.
+    # An exact brand phrase is stronger evidence than fuzzy similarity.
     if _contains_phrase(normalized_ocr, normalized_brand):
         return 60.0
 
-    # Fuzzy-match contiguous OCR fragments to tolerate recognition errors.
     words = normalized_ocr.split()
-    brand_length = len(normalized_brand.replace(" ", ""))
+    brand_compact = normalized_brand.replace(" ", "")
+    brand_length = len(brand_compact)
+
+    if brand_length < MIN_BRAND_LENGTH:
+        return 0.0
 
     best_score = 0.0
 
-    for size in range(1, min(5, len(words)) + 1):
+    # Match individual OCR tokens and short contiguous fragments.
+    for size in range(1, min(3, len(words)) + 1):
         for start in range(len(words) - size + 1):
             fragment = " ".join(words[start : start + size])
-            fragment_length = len(fragment.replace(" ", ""))
+            fragment_compact = fragment.replace(" ", "")
+            fragment_length = len(fragment_compact)
 
-            if fragment_length < MIN_BRAND_LENGTH:
+            # Ignore fragments that are too short to identify a brand.
+            if fragment_length < max(MIN_BRAND_LENGTH, brand_length - 2):
                 continue
 
-            ratio = min(fragment_length, brand_length) / max(
+            # Reject fragments whose length differs substantially.
+            length_ratio = min(fragment_length, brand_length) / max(
                 fragment_length,
                 brand_length,
             )
-
-            if ratio < 0.6:
+            if length_ratio < 0.75:
                 continue
 
-            similarity = float(fuzz.ratio(normalized_brand, fragment))
+            similarity = float(fuzz.ratio(brand_compact, fragment_compact))
 
-            best_score = max(best_score, similarity * 0.60)
+            # Require stronger similarity for fuzzy brand evidence.
+            if similarity < 75:
+                continue
+
+            best_score = max(best_score, similarity * 0.40)
 
     return best_score
 

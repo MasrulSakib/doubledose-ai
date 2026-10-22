@@ -8,9 +8,6 @@ import shutil
 import pytesseract
 from PIL import Image
 
-
-# Allow configuration for local development and deployment.
-# Prefer a valid explicit path, then discover Tesseract on the system PATH.
 tesseract_path = os.getenv("TESSERACT_CMD", "").strip()
 
 if tesseract_path and (
