@@ -21,7 +21,7 @@ app.include_router(ocr_router, prefix="/api/v1")
 app.include_router(matcher_router, prefix="/api/v1")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def root():
     return {
         "message": "Welcome to DoubleDose AI API",

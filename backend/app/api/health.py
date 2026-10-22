@@ -9,7 +9,7 @@ from app.db.session import get_db
 router = APIRouter(tags=["Health"])
 
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health_check(db: Session = Depends(get_db)):
     """Check API and database health."""
     try:
