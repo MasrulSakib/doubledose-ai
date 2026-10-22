@@ -93,7 +93,7 @@ def _preprocess_image(image: Image.Image) -> list:
         11,
     )
 
-    return [gray, thresholded]
+    return [gray, contrast]
 
 
 def _extract_candidate(
