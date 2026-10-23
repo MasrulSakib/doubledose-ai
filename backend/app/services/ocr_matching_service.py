@@ -4,7 +4,7 @@ from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
 
 from app.models.medicine import Medicine
-
+from sqlalchemy import or_
 
 MIN_BRAND_LENGTH = 4
 MIN_MATCH_SCORE = 45.0
@@ -211,17 +211,17 @@ def _dosage_form_score(
 
     return -10.0
 
+
 def _brand_match_score(
     normalized_ocr: str,
     brand_name: str,
 ) -> float:
-    """Score brand evidence conservatively when OCR text is noisy."""
+    """Prioritize exact and near-exact brand matches in noisy OCR text."""
     normalized_brand = normalize_text(brand_name)
 
     if not normalized_brand:
         return 0.0
 
-    # An exact brand phrase is stronger evidence than fuzzy similarity.
     if _contains_phrase(normalized_ocr, normalized_brand):
         return 60.0
 
@@ -232,36 +232,38 @@ def _brand_match_score(
     if brand_length < MIN_BRAND_LENGTH:
         return 0.0
 
-    best_score = 0.0
+    best_similarity = 0.0
 
-    # Match individual OCR tokens and short contiguous fragments.
-    for size in range(1, min(3, len(words)) + 1):
+    # Compare the brand against short consecutive OCR fragments.
+    for size in range(1, min(4, len(words)) + 1):
         for start in range(len(words) - size + 1):
             fragment = " ".join(words[start : start + size])
             fragment_compact = fragment.replace(" ", "")
-            fragment_length = len(fragment_compact)
 
-            # Ignore fragments that are too short to identify a brand.
-            if fragment_length < max(MIN_BRAND_LENGTH, brand_length - 2):
+            if len(fragment_compact) < MIN_BRAND_LENGTH:
                 continue
 
-            # Reject fragments whose length differs substantially.
-            length_ratio = min(fragment_length, brand_length) / max(
-                fragment_length,
-                brand_length,
-            )
+            length_ratio = min(
+                len(fragment_compact), brand_length
+            ) / max(len(fragment_compact), brand_length)
+
             if length_ratio < 0.75:
                 continue
 
-            similarity = float(fuzz.ratio(brand_compact, fragment_compact))
+            similarity = float(
+                fuzz.ratio(brand_compact, fragment_compact)
+            )
 
-            # Require stronger similarity for fuzzy brand evidence.
-            if similarity < 75:
-                continue
+            best_similarity = max(best_similarity, similarity)
 
-            best_score = max(best_score, similarity * 0.40)
+    # Near-exact brand spellings receive stronger evidence.
+    if best_similarity >= 85:
+        return best_similarity * 0.65
 
-    return best_score
+    if best_similarity >= 75:
+        return best_similarity * 0.40
+
+    return 0.0
 
 
 def _score_medicine(
@@ -313,11 +315,25 @@ def match_medicines_from_ocr(
     if not normalized_ocr:
         return []
 
-    medicines = (
-        db.query(Medicine)
-        .filter(Medicine.brand_name.isnot(None))
-        .all()
+    ocr_tokens = {
+        token
+        for token in normalized_ocr.split()
+        if len(token) >= MIN_BRAND_LENGTH
+    }
+
+    if not ocr_tokens:
+        return []
+
+    brand_filters = [
+        Medicine.brand_name.ilike(f"%{token}%")
+        for token in ocr_tokens
+    ]
+
+    medicine_query = db.query(Medicine).filter(
+        Medicine.brand_name.isnot(None)
     )
+
+    medicines = medicine_query.all()
 
     if not medicines:
         return []
@@ -348,7 +364,30 @@ def match_medicines_from_ocr(
         reverse=True,
     )
 
+    
     safe_limit = max(1, min(limit, MAX_RESULTS))
+
+    # Keep the highest-ranked record for each brand and dosage form.
+    unique_results = []
+    seen_products = set()
+
+    for medicine, score in ranked_results:
+        brand = normalize_text(medicine.brand_name or "")
+        source = normalize_text(medicine.source_display_name or "")
+
+        dosage_forms = _extract_dosage_forms(source)
+        dosage_form = tuple(sorted(dosage_forms))
+
+        product_key = (brand, dosage_form)
+
+        if product_key in seen_products:
+            continue
+
+        seen_products.add(product_key)
+        unique_results.append((medicine, score))
+
+        if len(unique_results) >= safe_limit:
+            break
 
     return [
         {
@@ -359,5 +398,5 @@ def match_medicines_from_ocr(
             "match_score": score,
             "needs_confirmation": True,
         }
-        for medicine, score in ranked_results[:safe_limit]
+        for medicine, score in unique_results
     ]

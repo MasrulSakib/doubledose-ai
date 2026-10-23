@@ -103,7 +103,7 @@ async def extract_medicine_text(file: UploadFile = File(...)):
         # Try text from detected medicine-label regions first.
         label_crops = detect_label_crops(image)
 
-        for crop in (label_crops or [])[:1]:
+        for crop in label_crops or []:
             text = extract_text_from_image(crop).strip()
 
             if text:
