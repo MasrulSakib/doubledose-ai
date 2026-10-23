@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Medicine } from "@/types/medicine";
@@ -12,6 +13,37 @@ type MedicineSearchProps = {
     error?: string | null;
     maxMedicines?: number;
 };
+
+/**
+ * Extract the strength from the existing database display string.
+ *
+ * Example:
+ * "BDDrugBank ID: 10452 | Generic: Paracetamol |
+ *  Strength: 500 mg | Slug: napatablet500-mg"
+ */
+function getMedicineStrength(
+    sourceDisplayName?: string | null,
+): string | null {
+    if (!sourceDisplayName) {
+        return null;
+    }
+
+    const match = sourceDisplayName.match(
+        /(?:^|\|)\s*Strength:\s*([^|]+)/i,
+    );
+
+    return match?.[1]?.trim() || null;
+}
+
+/**
+ * Preserve the complete source display string so that database metadata
+ * remains accessible even when its strength cannot be parsed.
+ */
+function hasAdditionalSourceDetails(
+    sourceDisplayName?: string | null,
+): boolean {
+    return Boolean(sourceDisplayName?.trim());
+}
 
 export default function MedicineSearch({
     query,
@@ -34,9 +66,11 @@ export default function MedicineSearch({
                 <p className="mb-2 text-[10px] font-extrabold tracking-[1.4px] text-emerald-700">
                     STEP 1
                 </p>
+
                 <h3 className="text-base font-bold text-emerald-950">
                     Find your medicines
                 </h3>
+
                 <p className="mt-1.5 text-xs leading-5 text-slate-500">
                     Search by brand name or medicine name, then add it to your list.
                 </p>
@@ -84,6 +118,7 @@ export default function MedicineSearch({
 
                 {searching && (
                     <span
+                        role="status"
                         aria-label="Searching medicines"
                         className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-emerald-100 border-t-emerald-700"
                     />
@@ -121,13 +156,20 @@ export default function MedicineSearch({
                     <div className="divide-y divide-slate-100">
                         {results.map((medicine) => {
                             const alreadySelected = selectedSet.has(medicine.id);
+                            const strength = getMedicineStrength(
+                                medicine.source_display_name,
+                            );
+
+                            const hasSourceDetails = hasAdditionalSourceDetails(
+                                medicine.source_display_name,
+                            );
 
                             return (
                                 <div
                                     key={medicine.id}
-                                    className="flex min-w-0 items-center gap-3 p-3 transition hover:bg-emerald-50/50"
+                                    className="flex min-w-0 items-start gap-3 p-3 transition hover:bg-emerald-50/50"
                                 >
-                                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-xs font-bold text-emerald-700">
+                                    <div className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-xs font-bold text-emerald-700">
                                         {medicine.brand_name.slice(0, 2).toUpperCase()}
                                     </div>
 
@@ -135,13 +177,57 @@ export default function MedicineSearch({
                                         <p className="break-words text-sm font-semibold text-slate-800">
                                             {medicine.brand_name}
                                         </p>
+
                                         <p className="mt-1 break-words text-xs leading-5 text-slate-500">
-                                            {medicine.generic_name || "Ingredient information unavailable"}
+                                            {medicine.generic_name ||
+                                                "Ingredient information unavailable"}
                                         </p>
+
+                                        {/* Restore the product strength and dosage form. */}
+                                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs leading-5 text-slate-600">
+                                            {strength && (
+                                                <span>
+                                                    <span className="font-semibold text-slate-700">
+                                                        Strength:
+                                                    </span>{" "}
+                                                    {strength}
+                                                </span>
+                                            )}
+
+                                            {medicine.dosage_form && (
+                                                <span>
+                                                    <span className="font-semibold text-slate-700">
+                                                        Form:
+                                                    </span>{" "}
+                                                    {medicine.dosage_form}
+                                                </span>
+                                            )}
+
+                                            {!strength && !medicine.dosage_form && (
+                                                <span className="text-amber-700">
+                                                    Strength and formulation not specified in the
+                                                    displayed record.
+                                                </span>
+                                            )}
+                                        </div>
+
                                         {medicine.manufacturer && (
-                                            <p className="mt-1 break-words text-[11px] text-slate-400">
+                                            <p className="mt-1.5 break-words text-[11px] leading-5 text-slate-400">
                                                 {medicine.manufacturer}
                                             </p>
+                                        )}
+
+                                        {/* Keep all original source metadata accessible. */}
+                                        {hasSourceDetails && (
+                                            <details className="mt-2 text-[11px] text-slate-500">
+                                                <summary className="w-fit cursor-pointer font-medium transition hover:text-emerald-700">
+                                                    Database record details
+                                                </summary>
+
+                                                <p className="mt-2 break-words rounded-lg bg-slate-50 p-2 leading-5">
+                                                    {medicine.source_display_name}
+                                                </p>
+                                            </details>
                                         )}
                                     </div>
 
@@ -154,9 +240,10 @@ export default function MedicineSearch({
                                                 ? `${medicine.brand_name} already selected`
                                                 : atLimit
                                                     ? `Selection limit reached for ${medicine.brand_name}`
-                                                    : `Add ${medicine.brand_name}`
+                                                    : `Add ${medicine.brand_name}${strength ? ` ${strength}` : ""
+                                                    }`
                                         }
-                                        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-xl text-emerald-700 transition hover:bg-emerald-700 hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                                        className="mt-3 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-xl text-emerald-700 transition hover:bg-emerald-700 hover:text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
                                     >
                                         {alreadySelected ? "✓" : "+"}
                                     </button>
