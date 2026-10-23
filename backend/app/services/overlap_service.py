@@ -15,15 +15,17 @@ from app.schemas.medicine import (
     OverlapCheckResponse,
     OverlappingIngredient,
 )
+from app.services.therapeutic_class_service import (
+    build_same_class_warnings,
+)
 
 
 def check_ingredient_overlap(
     db: Session,
     medicine_ids: list[int],
 ) -> OverlapCheckResponse:
-    """Compare selected medicines using their recorded ingredient data."""
+    """Compare exact active ingredients and flag known same-class patterns."""
 
-    # Load all selected medicines and their ingredient records efficiently.
     statement = (
         select(Medicine)
         .options(
@@ -41,19 +43,14 @@ def check_ingredient_overlap(
     missing_ids = set(medicine_ids) - found_ids
 
     if missing_ids:
-        raise LookupError(
-            f"Medicine IDs not found: {sorted(missing_ids)}"
-        )
+        raise LookupError(f"Medicine IDs not found: {sorted(missing_ids)}")
 
-    # A medicine without linked ingredient records has incomplete data
-    # for this database-based comparison.
     medicines_without_ingredient_data = sorted(
         medicine.id
         for medicine in medicines
         if not medicine.ingredients
     )
 
-    # Construct detailed medicine records from the database.
     medicine_details = []
 
     for medicine in medicines:
@@ -62,17 +59,15 @@ def check_ingredient_overlap(
         for association in medicine.ingredients:
             ingredient = association.ingredient
 
-            amount = (
-                float(association.amount)
-                if association.amount is not None
-                else None
-            )
-
             ingredient_details.append(
                 MedicineIngredientDetail(
                     id=ingredient.id,
                     name=ingredient.name,
-                    amount=amount,
+                    amount=(
+                        float(association.amount)
+                        if association.amount is not None
+                        else None
+                    ),
                     unit=association.unit,
                     source_name=association.source_name,
                     source_record_id=association.source_record_id,
@@ -93,7 +88,6 @@ def check_ingredient_overlap(
             )
         )
 
-    # Group ingredient records by their canonical active-ingredient ID.
     ingredient_matches = defaultdict(
         lambda: {
             "name": "",
@@ -124,9 +118,11 @@ def check_ingredient_overlap(
         if len(ingredient["medicine_ids"]) >= 2
     ]
 
-    overlapping_ingredients.sort(
-        key=lambda item: item.name.casefold()
-    )
+    overlapping_ingredients.sort(key=lambda item: item.name.casefold())
+
+    # Separate from exact ingredient overlap: this uses an explicit,
+    # curated therapeutic-class mapping.
+    same_class_warnings = build_same_class_warnings(medicines)
 
     has_overlap = bool(overlapping_ingredients)
     has_incomplete_data = bool(medicines_without_ingredient_data)
@@ -142,9 +138,8 @@ def check_ingredient_overlap(
         medicines=medicine_details,
         has_overlap=has_overlap,
         overlapping_ingredients=overlapping_ingredients,
+        same_class_warnings=same_class_warnings,
         result_status=result_status,
         has_incomplete_data=has_incomplete_data,
-        medicines_without_ingredient_data=(
-            medicines_without_ingredient_data
-        ),
+        medicines_without_ingredient_data=medicines_without_ingredient_data,
     )

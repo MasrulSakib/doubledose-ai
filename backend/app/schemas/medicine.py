@@ -77,7 +77,18 @@ class OverlappingIngredient(BaseModel):
     medicine_names: list[str]
 
 
+class SameClassWarning(BaseModel):
+    therapeutic_class: str
+    ingredient_names: list[str]
+    medicine_ids: list[int]
+    medicine_names: list[str]
+    message: str
+
+
 class OverlapCheckResponse(BaseModel):
+    same_class_warnings: list[SameClassWarning] = Field(
+        default_factory=list
+    )
     medicines: list[MedicineComparisonResponse]
     has_overlap: bool
     overlapping_ingredients: list[OverlappingIngredient]
