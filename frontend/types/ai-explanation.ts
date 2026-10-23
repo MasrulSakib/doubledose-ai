@@ -8,16 +8,25 @@ export interface OverlapIngredientInput {
   medicine_names: string[];
 }
 
+export interface AIExplanationIngredientInput {
+  name: string;
+  amount?: number | null;
+  unit?: string | null;
+  source_name?: string | null;
+  source_record_id?: string | null;
+  source_url?: string | null;
+  retrieved_at?: string | null;
+}
+
 export interface AIExplanationMedicineInput {
   name: string;
   generic_name?: string | null;
   source_details?: string | null;
   dosage_form?: string | null;
   manufacturer?: string | null;
+  ingredients?: AIExplanationIngredientInput[];
   side_effects?: string[];
   daily_dose?: string | null;
-  information_source?: string | null;
-  source_url?: string | null;
 }
 
 export interface AIExplanationRequest {

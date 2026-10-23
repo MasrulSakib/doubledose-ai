@@ -141,6 +141,74 @@ export default function IngredientResults({
         </div>
       ) : null}
 
+
+      {/* Possible same-class duplication — separate from exact overlap */}
+      {result.same_class_warnings?.length > 0 && (
+        <section className="mb-6 space-y-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              Possible same-class duplication
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Different active ingredients belonging to the same recorded
+              therapeutic class. This is separate from an exact ingredient overlap.
+            </p>
+          </div>
+
+          {result.same_class_warnings.map((warning, index) => (
+            <article
+              key={`${warning.therapeutic_class}-${index}`}
+              className="rounded-xl border border-blue-200 bg-blue-50/60 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-100 text-sm font-extrabold text-blue-800"
+                >
+                  i
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-bold text-blue-950">
+                    {warning.therapeutic_class}
+                  </h4>
+
+                  <p className="mt-2 text-sm leading-6 text-blue-900">
+                    Different recorded active ingredients in this class were
+                    found among the selected medicines.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {warning.ingredient_names.map((name, ingredientIndex) => (
+                      <span
+                        key={`${name}-${ingredientIndex}`}
+                        className="max-w-full break-words rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-900"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="mt-3 text-xs font-semibold text-blue-950">
+                    Medicines involved
+                  </p>
+
+                  <ul className="mt-1 list-inside list-disc space-y-1 text-sm leading-6 text-blue-900">
+                    {warning.medicine_names.map((name, medicineIndex) => (
+                      <li key={`${name}-${medicineIndex}`}>{name}</li>
+                    ))}
+                  </ul>
+
+                  <p className="mt-3 text-sm leading-6 text-blue-900">
+                    {warning.message}
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+
       {result.medicines_without_ingredient_data.length > 0 && (
         <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4">
           <h3 className="text-sm font-bold text-orange-950">Ingredient data unavailable in the current database for:</h3>
