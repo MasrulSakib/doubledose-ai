@@ -2,7 +2,7 @@
 from collections import defaultdict
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.medicine import (
     ActiveIngredient,
@@ -10,7 +10,8 @@ from app.models.medicine import (
     MedicineIngredient,
 )
 from app.schemas.medicine import (
-    MedicineResponse,
+    MedicineComparisonResponse,
+    MedicineIngredientDetail,
     OverlapCheckResponse,
     OverlappingIngredient,
 )
@@ -20,15 +21,21 @@ def check_ingredient_overlap(
     db: Session,
     medicine_ids: list[int],
 ) -> OverlapCheckResponse:
-    """Identify shared ingredients and flag missing ingredient data."""
+    """Compare selected medicines using their recorded ingredient data."""
 
-    medicines = list(
-        db.scalars(
-            select(Medicine)
-            .where(Medicine.id.in_(medicine_ids))
-            .order_by(Medicine.id)
-        ).all()
+    # Load all selected medicines and their ingredient records efficiently.
+    statement = (
+        select(Medicine)
+        .options(
+            selectinload(Medicine.ingredients).joinedload(
+                MedicineIngredient.ingredient
+            )
+        )
+        .where(Medicine.id.in_(medicine_ids))
+        .order_by(Medicine.id)
     )
+
+    medicines = list(db.scalars(statement).all())
 
     found_ids = {medicine.id for medicine in medicines}
     missing_ids = set(medicine_ids) - found_ids
@@ -38,43 +45,55 @@ def check_ingredient_overlap(
             f"Medicine IDs not found: {sorted(missing_ids)}"
         )
 
-    # Identify selected medicines that have ingredient records.
-    ingredient_data_statement = (
-        select(MedicineIngredient.medicine_id)
-        .where(MedicineIngredient.medicine_id.in_(medicine_ids))
-        .distinct()
-    )
-
-    medicines_with_ingredient_data = set(
-        db.scalars(ingredient_data_statement).all()
-    )
-
+    # A medicine without linked ingredient records has incomplete data
+    # for this database-based comparison.
     medicines_without_ingredient_data = sorted(
-        set(medicine_ids) - medicines_with_ingredient_data
+        medicine.id
+        for medicine in medicines
+        if not medicine.ingredients
     )
 
-    # Retrieve ingredient records for the selected medicines.
-    statement = (
-        select(
-            MedicineIngredient.medicine_id,
-            Medicine.brand_name,
-            ActiveIngredient.id,
-            ActiveIngredient.name,
-        )
-        .join(
-            Medicine,
-            Medicine.id == MedicineIngredient.medicine_id,
-        )
-        .join(
-            ActiveIngredient,
-            ActiveIngredient.id == MedicineIngredient.ingredient_id,
-        )
-        .where(MedicineIngredient.medicine_id.in_(medicine_ids))
-        .order_by(ActiveIngredient.name)
-    )
+    # Construct detailed medicine records from the database.
+    medicine_details = []
 
-    rows = db.execute(statement).all()
+    for medicine in medicines:
+        ingredient_details = []
 
+        for association in medicine.ingredients:
+            ingredient = association.ingredient
+
+            amount = (
+                float(association.amount)
+                if association.amount is not None
+                else None
+            )
+
+            ingredient_details.append(
+                MedicineIngredientDetail(
+                    id=ingredient.id,
+                    name=ingredient.name,
+                    amount=amount,
+                    unit=association.unit,
+                    source_name=association.source_name,
+                    source_record_id=association.source_record_id,
+                    source_url=association.source_url,
+                    retrieved_at=association.retrieved_at,
+                )
+            )
+
+        medicine_details.append(
+            MedicineComparisonResponse(
+                id=medicine.id,
+                brand_name=medicine.brand_name,
+                source_display_name=medicine.source_display_name,
+                generic_name=medicine.generic_name,
+                dosage_form=medicine.dosage_form,
+                manufacturer=medicine.manufacturer,
+                ingredients=ingredient_details,
+            )
+        )
+
+    # Group ingredient records by their canonical active-ingredient ID.
     ingredient_matches = defaultdict(
         lambda: {
             "name": "",
@@ -83,13 +102,16 @@ def check_ingredient_overlap(
         }
     )
 
-    for row in rows:
-        ingredient = ingredient_matches[row.id]
-        ingredient["name"] = row.name
+    for medicine in medicines:
+        for association in medicine.ingredients:
+            ingredient = association.ingredient
+            match = ingredient_matches[ingredient.id]
 
-        if row.medicine_id not in ingredient["medicine_ids"]:
-            ingredient["medicine_ids"].append(row.medicine_id)
-            ingredient["medicine_names"].append(row.brand_name)
+            match["name"] = ingredient.name
+
+            if medicine.id not in match["medicine_ids"]:
+                match["medicine_ids"].append(medicine.id)
+                match["medicine_names"].append(medicine.brand_name)
 
     overlapping_ingredients = [
         OverlappingIngredient(
@@ -102,6 +124,10 @@ def check_ingredient_overlap(
         if len(ingredient["medicine_ids"]) >= 2
     ]
 
+    overlapping_ingredients.sort(
+        key=lambda item: item.name.casefold()
+    )
+
     has_overlap = bool(overlapping_ingredients)
     has_incomplete_data = bool(medicines_without_ingredient_data)
 
@@ -113,10 +139,7 @@ def check_ingredient_overlap(
         result_status = "no_overlap_found"
 
     return OverlapCheckResponse(
-        medicines=[
-            MedicineResponse.model_validate(medicine)
-            for medicine in medicines
-        ],
+        medicines=medicine_details,
         has_overlap=has_overlap,
         overlapping_ingredients=overlapping_ingredients,
         result_status=result_status,

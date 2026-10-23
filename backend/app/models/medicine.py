@@ -1,5 +1,8 @@
 
+from datetime import datetime
+
 from sqlalchemy import (
+    DateTime,
     ForeignKey,
     Integer,
     Numeric,
@@ -7,9 +10,9 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
-from datetime import datetime
-from sqlalchemy import DateTime
+
 
 class Medicine(Base):
     __tablename__ = "medicines"
@@ -40,13 +43,12 @@ class Medicine(Base):
         String(200),
         nullable=True,
     )
-
     rxnorm_rxcui: Mapped[str | None] = mapped_column(
         String(20),
         unique=True,
         nullable=True,
         index=True,
-    )    
+    )
 
     ingredients: Mapped[list["MedicineIngredient"]] = relationship(
         back_populates="medicine",
@@ -67,7 +69,6 @@ class ActiveIngredient(Base):
         unique=True,
         index=True,
     )
-
     rxnorm_rxcui: Mapped[str | None] = mapped_column(
         String(20),
         unique=True,
@@ -124,9 +125,10 @@ class MedicineIngredient(Base):
         nullable=True,
     )
     retrieved_at: Mapped[datetime | None] = mapped_column(
-    DateTime(timezone=True),
-    nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
+
     medicine: Mapped["Medicine"] = relationship(
         back_populates="ingredients",
     )

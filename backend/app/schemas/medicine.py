@@ -1,10 +1,13 @@
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MedicineResponse(BaseModel):
+    """Standard medicine response used by medicine search."""
+
     id: int
     brand_name: str
     source_display_name: str | None = None
@@ -20,6 +23,33 @@ class IngredientResponse(BaseModel):
     name: str
     amount: float | None = None
     unit: str | None = None
+
+
+class MedicineIngredientDetail(BaseModel):
+    """An ingredient and its available provenance information."""
+
+    id: int
+    name: str
+    amount: float | None = None
+    unit: str | None = None
+    source_name: str | None = None
+    source_record_id: str | None = None
+    source_url: str | None = None
+    retrieved_at: datetime | None = None
+
+
+class MedicineComparisonResponse(BaseModel):
+    """Detailed database-backed information for overlap comparisons."""
+
+    id: int
+    brand_name: str
+    source_display_name: str | None = None
+    generic_name: str | None = None
+    dosage_form: str | None = None
+    manufacturer: str | None = None
+    ingredients: list[MedicineIngredientDetail] = Field(
+        default_factory=list
+    )
 
 
 class OverlapCheckRequest(BaseModel):
@@ -48,7 +78,7 @@ class OverlappingIngredient(BaseModel):
 
 
 class OverlapCheckResponse(BaseModel):
-    medicines: list[MedicineResponse]
+    medicines: list[MedicineComparisonResponse]
     has_overlap: bool
     overlapping_ingredients: list[OverlappingIngredient]
     result_status: Literal[
