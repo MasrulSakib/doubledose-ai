@@ -12,6 +12,17 @@ class OverlapIngredientInput(BaseModel):
     )
 
 
+class SameClassWarningInput(BaseModel):
+    therapeutic_class: str = Field(min_length=1, max_length=200)
+    ingredient_names: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    medicine_ids: list[int] = Field(default_factory=list, max_length=5)
+    medicine_names: list[str] = Field(default_factory=list, max_length=5)
+    message: str = Field(min_length=1, max_length=1000)
+
+
 class AIExplanationIngredientInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     amount: float | None = None
@@ -56,6 +67,11 @@ class AIExplanationRequest(BaseModel):
     overlapping_ingredients: list[OverlapIngredientInput] = Field(
         default_factory=list,
         max_length=30,
+    )
+
+    same_class_warnings: list[SameClassWarningInput] = Field(
+        default_factory=list,
+        max_length=10,
     )
 
     medicines_without_ingredient_data: list[str] = Field(

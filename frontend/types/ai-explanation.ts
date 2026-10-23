@@ -8,6 +8,14 @@ export interface OverlapIngredientInput {
   medicine_names: string[];
 }
 
+export interface SameClassWarningInput {
+  therapeutic_class: string;
+  ingredient_names: string[];
+  medicine_ids: number[];
+  medicine_names: string[];
+  message: string;
+}
+
 export interface AIExplanationIngredientInput {
   name: string;
   amount?: number | null;
@@ -34,6 +42,7 @@ export interface AIExplanationRequest {
   medicine_names: string[];
   medicines?: AIExplanationMedicineInput[];
   overlapping_ingredients: OverlapIngredientInput[];
+  same_class_warnings?: SameClassWarningInput[];
   medicines_without_ingredient_data: string[];
 }
 

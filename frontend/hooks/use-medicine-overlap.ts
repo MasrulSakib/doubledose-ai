@@ -62,9 +62,7 @@ async function generateExplanationWithRetry(
     try {
       return await explainOverlap(payload);
     } catch (error) {
-      const isLastAttempt = attempt === maxAttempts;
-
-      if (isLastAttempt || isPermanentAIError(error)) {
+      if (attempt === maxAttempts || isPermanentAIError(error)) {
         throw error;
       }
 
@@ -119,7 +117,6 @@ export default function useMedicineOverlap() {
       }
 
       const data: OverlapResult = await response.json();
-
       setResult(data);
 
       const selectedNamesById = new Map(
@@ -141,12 +138,10 @@ export default function useMedicineOverlap() {
             medicine.brand_name ||
             medicine.generic_name ||
             `Medicine ${medicine.id}`,
-
           generic_name: medicine.generic_name,
           source_details: medicine.source_display_name,
           dosage_form: medicine.dosage_form,
           manufacturer: medicine.manufacturer,
-
           ingredients: medicine.ingredients.map((ingredient) => ({
             name: ingredient.name,
             amount: ingredient.amount,
@@ -156,11 +151,7 @@ export default function useMedicineOverlap() {
             source_url: ingredient.source_url,
             retrieved_at: ingredient.retrieved_at,
           })),
-
-          // Verified side-effect data has not been integrated yet.
           side_effects: [],
-
-          // Product strength must not be treated as a patient's daily dose.
           daily_dose: null,
         })),
 
@@ -168,6 +159,16 @@ export default function useMedicineOverlap() {
           (ingredient) => ({
             name: ingredient.name,
             medicine_names: ingredient.medicine_names,
+          }),
+        ),
+
+        same_class_warnings: (data.same_class_warnings ?? []).map(
+          (warning) => ({
+            therapeutic_class: warning.therapeutic_class,
+            ingredient_names: warning.ingredient_names,
+            medicine_ids: warning.medicine_ids,
+            medicine_names: warning.medicine_names,
+            message: warning.message,
           }),
         ),
 
@@ -181,7 +182,6 @@ export default function useMedicineOverlap() {
 
       try {
         const explanation = await generateExplanationWithRetry(payload);
-
         setAiExplanation(explanation);
       } catch (error) {
         setAiError(
