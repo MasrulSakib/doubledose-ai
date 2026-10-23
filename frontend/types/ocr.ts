@@ -25,3 +25,13 @@ export interface OCRMatchResponse {
   match_count: number;
   message: string;
 }
+
+export type OCRMatchResultsProps = {
+  extractedText: string;
+  onExtractedTextChange: (text: string) => void;
+  matches: OCRMedicineMatch[];
+  onSelectMatch: (match: OCRMedicineMatch) => void;
+  selectedMedicineIds: number[];
+  matching?: boolean;
+  error?: string | null;
+};

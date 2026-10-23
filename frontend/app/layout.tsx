@@ -1,4 +1,8 @@
+
 import type { Metadata } from "next";
+import { Suspense } from "react";
+
+import StoreProvider from "@/app/StoreProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <StoreProvider>{children}</StoreProvider>
+      </body>
     </html>
   );
 }
