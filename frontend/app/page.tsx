@@ -115,7 +115,7 @@ export default function Home() {
               className="min-h-32 w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               rows={5}
               value={ocr.ocrText}
-              onChange={(event) => ocr.setOcrText(event.target.value)}
+              onChange={(event) => ocr.updateOCRText(event.target.value)}
               placeholder="Extracted medicine text appears here..."
             />
             <button

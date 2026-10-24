@@ -37,7 +37,7 @@ medicines when an overlap is present. Do not infer that harm will occur.
 
 ### 2. Medicine comparison
 Create one table row per selected medicine with these columns:
-| Medicine | Recorded active ingredients and amounts | Strength / product details | Dosage form | Manufacturer | Shared ingredients | Side-effect information status | Prescribed daily dose status |
+| Medicine | Recorded active ingredients (amounts when supplied) | Strength / product details | Dosage form | Manufacturer | Shared ingredients | Side-effect information status | Prescribed daily dose status |
 
 Use supplied ingredient records, amount, unit, product details, dosage form,
 and manufacturer. Do not invent missing fields.
@@ -94,6 +94,20 @@ def _cell(value: str | None, fallback: str = "Not provided") -> str:
         value = fallback
     return " ".join(value.replace("|", "\\|").split())
 
+def _short_reference_text(
+    value: str | None,
+    max_length: int = 500,
+) -> str | None:
+    if not value or not value.strip():
+        return None
+
+    text = " ".join(value.split())
+
+    if len(text) <= max_length:
+        return text
+
+    truncated = text[:max_length].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"{truncated}… [truncated; consult the source label]"
 
 def _valid_http_url(url: str | None) -> bool:
     if not url:
@@ -204,7 +218,7 @@ def _build_fallback_report(
         [
             "### 2. Medicine comparison",
             "",
-            "| Medicine | Recorded active ingredients and amounts | "
+            "| Medicine | Recorded active ingredients (amounts when supplied) | "
             "Strength / product details | Dosage form | Manufacturer | "
             "Shared ingredients | Side-effect information status | "
             "Prescribed daily dose status |",
@@ -374,21 +388,24 @@ def _build_fallback_report(
                 "verified against the exact selected Bangladeshi product."
             )
 
-            for field, label in (
-                ("label_effective_date", "Label effective date"),
-                ("label_product_brand", "Label brand"),
-                ("label_product_generic", "Label generic name"),
-                ("label_manufacturer", "Label manufacturer"),
-                ("label_dosage_form", "Label dosage form"),
-                ("adverse_reactions", "Label adverse reactions"),
-                ("warnings", "Label warnings"),
-                ("contraindications", "Label contraindications"),
-                ("dosage_and_administration", "General label dosage guidance"),
+            
+            for field, label, max_length in (
+                ("label_effective_date", "Label effective date", 40),
+                ("label_product_brand", "Label brand", 100),
+                ("label_product_generic", "Label generic name", 100),
+                ("label_manufacturer", "Label manufacturer", 100),
+                ("label_dosage_form", "Label dosage form", 80),
+                ("warnings", "Label warning excerpt", 500),
+                ("adverse_reactions", "Adverse reaction excerpt", 500),
+                ("contraindications", "Contraindication excerpt", 500),
+
             ):
-                if reference.get(field):
-                    lines.extend(
-                        ["", f"**{label}:**", "", str(reference[field])]
-                    )
+                value = _short_reference_text(
+                    reference.get(field),
+                    max_length=max_length,
+                )
+                if value:
+                    lines.extend(["", f"**{label}:**", "", value])
 
             lines.append("")
 

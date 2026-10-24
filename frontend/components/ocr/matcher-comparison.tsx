@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { MatcherCompareResponse } from "@/types/matcher";
@@ -10,9 +11,11 @@ type MatcherComparisonProps = {
     selectedCount: number;
 };
 
-function candidateStrength(candidate: OCRMedicineMatch): string | null {
+function candidateStrength(
+    candidate: OCRMedicineMatch,
+): string | null {
     const match = candidate.strength?.match(
-        /\|\s*Strength:\s*(.*?)\s*(?:\||$)/i,
+        /(?:\|\s*)?\*?Strength:\s*\*?(.*?)(?:\s*\||$)/i,
     );
 
     return match?.[1]?.trim() || null;
@@ -44,9 +47,11 @@ export default function MatcherComparison({
                     <p className="mb-2 text-[10px] font-extrabold tracking-[1.4px] text-emerald-700">
                         MATCHING RESULTS
                     </p>
+
                     <h3 className="text-base font-bold text-emerald-950">
                         Medicine match candidates
                     </h3>
+
                     <p className="mt-1.5 text-xs leading-5 text-slate-500">
                         Compare suggestions from two matching methods and confirm the
                         medicine that matches your label.
@@ -74,6 +79,7 @@ export default function MatcherComparison({
                             <h4 className="text-sm font-bold text-slate-900">
                                 {name}
                             </h4>
+
                             <p className="mt-1 text-xs text-slate-500">
                                 {description} · {candidates.length}{" "}
                                 {candidates.length === 1 ? "candidate" : "candidates"}
@@ -92,9 +98,13 @@ export default function MatcherComparison({
                                     );
                                     const limitReached = selectedCount >= 5;
                                     const cannotAdd = limitReached || alreadySelected;
-                                    const lowConfidence = candidate.match_score < 65;
-                                    const strength = candidateStrength(candidate);
+
                                     const score = Number(candidate.match_score);
+                                    const validScore =
+                                        Number.isFinite(score) && score >= 0 && score <= 100;
+                                    const lowConfidence = !validScore || score < 65;
+                                    const strength = candidateStrength(candidate);
+                                    const displayedScore = validScore ? score : 0;
 
                                     return (
                                         <div
@@ -111,8 +121,7 @@ export default function MatcherComparison({
                                                 </h5>
 
                                                 <p className="mt-1 break-words text-xs leading-5 text-slate-600">
-                                                    {candidate.generic_name ||
-                                                        "Generic name unavailable"}
+                                                    {candidate.generic_name || "Generic name unavailable"}
                                                 </p>
 
                                                 {strength && (
@@ -126,15 +135,14 @@ export default function MatcherComparison({
                                                         <span className="text-[11px] font-semibold text-slate-600">
                                                             Similarity score
                                                         </span>
+
                                                         <span
                                                             className={`text-xs font-bold ${lowConfidence
                                                                 ? "text-amber-700"
                                                                 : "text-emerald-700"
                                                                 }`}
                                                         >
-                                                            {Number.isFinite(score)
-                                                                ? `${score.toFixed(1)}%`
-                                                                : "Unavailable"}
+                                                            {validScore ? `${score.toFixed(1)}%` : "Unavailable"}
                                                         </span>
                                                     </div>
 
@@ -144,39 +152,44 @@ export default function MatcherComparison({
                                                         aria-label={`${candidate.brand_name} similarity score`}
                                                         aria-valuemin={0}
                                                         aria-valuemax={100}
-                                                        aria-valuenow={
-                                                            Number.isFinite(score)
-                                                                ? Math.min(100, Math.max(0, score))
-                                                                : 0
-                                                        }
+                                                        aria-valuenow={displayedScore}
                                                     >
                                                         <div
-                                                            className={`h-full rounded-full ${lowConfidence
-                                                                ? "bg-amber-500"
-                                                                : "bg-emerald-600"
+                                                            className={`h-full rounded-full ${lowConfidence ? "bg-amber-500" : "bg-emerald-600"
                                                                 }`}
-                                                            style={{
-                                                                width: `${Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 0}%`,
-                                                            }}
+                                                            style={{ width: `${displayedScore}%` }}
                                                         />
                                                     </div>
                                                 </div>
 
                                                 <p
-                                                    className={`mt-2 text-[11px] leading-5 ${lowConfidence
-                                                        ? "text-amber-700"
-                                                        : "text-slate-500"
+                                                    className={`mt-2 text-[11px] leading-5 ${lowConfidence ? "text-amber-700" : "text-slate-500"
                                                         }`}
                                                 >
-                                                    {lowConfidence
-                                                        ? "Low score — verify the packaging carefully."
-                                                        : "Possible match — verify the packaging before adding."}
+                                                    {!validScore
+                                                        ? "Score unavailable — verify the medicine details carefully."
+                                                        : lowConfidence
+                                                            ? "Low score — verify the packaging carefully."
+                                                            : "Possible match — verify the packaging before adding."}
                                                 </p>
 
                                                 <button
                                                     className="mt-3 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:w-auto"
                                                     type="button"
-                                                    onClick={() => onSelectCandidate(candidate)}
+                                                    onClick={() => {
+                                                        if (lowConfidence) {
+                                                            const confirmed = window.confirm(
+                                                                `This is ${validScore
+                                                                    ? `a low-confidence match (${score.toFixed(1)}%).`
+                                                                    : "a match with an unavailable or invalid score."
+                                                                } Verify the medicine name, strength, and packaging carefully. Add "${candidate.brand_name}" anyway?`,
+                                                            );
+
+                                                            if (!confirmed) return;
+                                                        }
+
+                                                        onSelectCandidate(candidate);
+                                                    }}
                                                     disabled={cannotAdd}
                                                     aria-label={`Confirm and add ${candidate.brand_name}`}
                                                     title={

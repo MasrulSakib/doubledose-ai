@@ -32,13 +32,9 @@ export default function useMedicineOCR() {
     setMatcherComparison(null);
     setOcrMessage("");
 
-    setOcrPreviewUrl((previousUrl) => {
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-      return file ? URL.createObjectURL(file) : null;
-    });
-
     if (!file) {
       setOcrFile(null);
+      setOcrPreviewUrl(null);
       return;
     }
 
@@ -57,6 +53,14 @@ export default function useMedicineOCR() {
     }
 
     setOcrFile(file);
+    setOcrPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function updateOCRText(text: string) {
+    setOcrText(text);
+    setMatcherComparison(null);
+    setOcrMessage("");
+    setOcrError("");
   }
 
   async function runMatcherComparison(text: string) {
@@ -111,7 +115,9 @@ export default function useMedicineOCR() {
   }
 
   async function rematchEditedOCRText() {
-    if (!ocrText.trim() || ocrLoading) return;
+    const trimmedText = ocrText.trim();
+
+    if (!trimmedText || ocrLoading) return;
 
     setOcrLoading(true);
     setOcrError("");
@@ -119,7 +125,7 @@ export default function useMedicineOCR() {
     setOcrMessage("");
 
     try {
-      await runMatcherComparison(ocrText.trim());
+      await runMatcherComparison(trimmedText);
     } catch (error) {
       setOcrError(
         error instanceof Error
@@ -139,6 +145,7 @@ export default function useMedicineOCR() {
     ocrText,
     matcherComparison,
     ocrMessage,
+    updateOCRText,
     setOcrText,
     handleOCRFileChange,
     processOCR,
