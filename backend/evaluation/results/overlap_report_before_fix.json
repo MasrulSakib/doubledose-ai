@@ -1,0 +1,174 @@
+{
+  "cases_file": "overlap_cases.json",
+  "cases_total": 36,
+  "cases_evaluated": 36,
+  "cases_unresolved_brand_ids": [],
+  "combination_level": {
+    "tp": 13,
+    "fp": 0,
+    "fn": 8,
+    "precision": 1.0,
+    "recall": 0.619,
+    "f1": 0.765,
+    "tn": 15
+  },
+  "ingredient_level": {
+    "tp": 14,
+    "fp": 0,
+    "fn": 9,
+    "precision": 1.0,
+    "recall": 0.609,
+    "f1": 0.757
+  },
+  "status_accuracy": 0.778,
+  "request_order_preserved": 19,
+  "by_category": {
+    "plain_exact": {
+      "cases": 6,
+      "status_correct": 6
+    },
+    "salt_or_format_variant": {
+      "cases": 10,
+      "status_correct": 2
+    },
+    "same_class_no_exact_overlap": {
+      "cases": 6,
+      "status_correct": 6
+    },
+    "unrelated": {
+      "cases": 2,
+      "status_correct": 2
+    },
+    "multi": {
+      "cases": 7,
+      "status_correct": 7
+    },
+    "incomplete_data": {
+      "cases": 5,
+      "status_correct": 5
+    }
+  },
+  "failures": [
+    {
+      "id": "S01",
+      "category": "salt_or_format_variant",
+      "note": "Amoxicillin Trihydrate vs Amoxicillin (co-amoxiclav)",
+      "expected_overlap": [
+        "amoxicillin"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": true
+    },
+    {
+      "id": "S02",
+      "category": "salt_or_format_variant",
+      "note": "Atorvastatin Calcium vs Atorvastatin",
+      "expected_overlap": [
+        "atorvastatin"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": false
+    },
+    {
+      "id": "S03",
+      "category": "salt_or_format_variant",
+      "note": "Amlodipine Besilate vs Amlodipine",
+      "expected_overlap": [
+        "amlodipine"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": true
+    },
+    {
+      "id": "S04",
+      "category": "salt_or_format_variant",
+      "note": "Metformin Hydrochloride vs Metformin",
+      "expected_overlap": [
+        "metformin"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": false
+    },
+    {
+      "id": "S05",
+      "category": "salt_or_format_variant",
+      "note": "Esomeprazole vs Esomeprazole Magnesium (with naproxen)",
+      "expected_overlap": [
+        "esomeprazole"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": true
+    },
+    {
+      "id": "S06",
+      "category": "salt_or_format_variant",
+      "note": "Diclofenac Potassium vs Diclofenac Sodium",
+      "expected_overlap": [
+        "diclofenac"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": false
+    },
+    {
+      "id": "S07",
+      "category": "salt_or_format_variant",
+      "note": "name stored with non-breaking spaces",
+      "expected_overlap": [
+        "tramadol"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": true
+    },
+    {
+      "id": "S08",
+      "category": "salt_or_format_variant",
+      "note": "name stored with a double space",
+      "expected_overlap": [
+        "tamsulosin"
+      ],
+      "predicted_overlap": [],
+      "expected_status": "overlap_found",
+      "predicted_status": "no_overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": false
+    },
+    {
+      "id": "M07",
+      "category": "multi",
+      "note": "two singles plus their combination",
+      "expected_overlap": [
+        "glimepiride",
+        "metformin"
+      ],
+      "predicted_overlap": [
+        "glimepiride"
+      ],
+      "expected_status": "overlap_found",
+      "predicted_status": "overlap_found",
+      "has_incomplete_data": false,
+      "returned_medicine_ids_in_request_order": false
+    }
+  ],
+  "label_caveat": "Hand-labelled ingredient-overlap cases built from real records in data/medicine.csv. Labels were written by the developer's assistant from the generic-name column using standard pharmacology (same active moiety = overlap; same class but different moiety = no exact overlap). They have NOT been verified by a pharmacist."
+}

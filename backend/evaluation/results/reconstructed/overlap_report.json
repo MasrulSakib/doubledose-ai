@@ -1,0 +1,49 @@
+{
+  "cases_file": "overlap_cases_reconstructed.json",
+  "cases_total": 10,
+  "cases_evaluated": 10,
+  "cases_unresolved_brand_ids": [],
+  "combination_level": {
+    "tp": 8,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "tn": 2
+  },
+  "ingredient_level": {
+    "tp": 8,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "status_accuracy": 1.0,
+  "request_order_preserved": 10,
+  "by_category": {
+    "salt_or_format_variant": {
+      "cases": 4,
+      "status_correct": 4
+    },
+    "multi": {
+      "cases": 3,
+      "status_correct": 3
+    },
+    "unrelated": {
+      "cases": 1,
+      "status_correct": 1
+    },
+    "incomplete_data": {
+      "cases": 1,
+      "status_correct": 1
+    },
+    "plain_exact": {
+      "cases": 1,
+      "status_correct": 1
+    }
+  },
+  "failures": [],
+  "label_caveat": "Reconstructed preliminary overlap regression evaluation using verified BDDrugBank source IDs and current database mappings. Expected labels are provisional and have not been independently verified by a pharmacist. This is a developer regression set, not representative clinical validation."
+}

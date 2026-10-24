@@ -1,0 +1,131 @@
+{
+  "description": "Reconstructed preliminary overlap regression evaluation using verified BDDrugBank source IDs and current database mappings. Expected labels are provisional and have not been independently verified by a pharmacist. This is a developer regression set, not representative clinical validation.",
+  "cases": [
+    {
+      "id": "R01",
+      "brand_ids": [
+        27318,
+        19612
+      ],
+      "expected_overlap": [
+        "amoxicillin"
+      ],
+      "expected_status": "overlap_found",
+      "category": "salt_or_format_variant",
+      "note": "Amoxicillin trihydrate products with different strengths and forms"
+    },
+    {
+      "id": "R02",
+      "brand_ids": [
+        25540,
+        1118
+      ],
+      "expected_overlap": [
+        "atorvastatin"
+      ],
+      "expected_status": "overlap_found",
+      "category": "salt_or_format_variant",
+      "note": "Atorvastatin calcium products"
+    },
+    {
+      "id": "R03",
+      "brand_ids": [
+        30595,
+        785
+      ],
+      "expected_overlap": [
+        "amlodipine"
+      ],
+      "expected_status": "overlap_found",
+      "category": "multi",
+      "note": "Advast and Aloten Forte share amlodipine; their other ingredients differ"
+    },
+    {
+      "id": "R04",
+      "brand_ids": [
+        17213,
+        30906
+      ],
+      "expected_overlap": [
+        "metformin"
+      ],
+      "expected_status": "overlap_found",
+      "category": "multi",
+      "note": "Adlinameg and Ajardy M share metformin"
+    },
+    {
+      "id": "R05",
+      "brand_ids": [
+        11536,
+        1982
+      ],
+      "expected_overlap": [
+        "esomeprazole"
+      ],
+      "expected_status": "overlap_found",
+      "category": "salt_or_format_variant",
+      "note": "Esomeprazole magnesium combination and esomeprazole product; verify source ID 1982 resolves locally"
+    },
+    {
+      "id": "R06",
+      "brand_ids": [
+        11136,
+        27400
+      ],
+      "expected_overlap": [
+        "diclofenac"
+      ],
+      "expected_status": "overlap_found",
+      "category": "salt_or_format_variant",
+      "note": "Diclofenac potassium versus diclofenac sodium"
+    },
+    {
+      "id": "R07",
+      "brand_ids": [
+        23386,
+        19175
+      ],
+      "expected_overlap": [],
+      "expected_status": "no_overlap_found",
+      "category": "unrelated",
+      "note": "Alkaparol (paracetamol) versus Adtrizin (cetirizine hydrochloride)"
+    },
+    {
+      "id": "R08",
+      "brand_ids": [
+        14480,
+        14399
+      ],
+      "expected_overlap": [],
+      "expected_status": "incomplete_data",
+      "category": "incomplete_data",
+      "note": "Both A-Cal products have no mapped ingredient associations"
+    },
+    {
+      "id": "R09",
+      "brand_ids": [
+        11262,
+        11261
+      ],
+      "expected_overlap": [
+        "ibuprofen"
+      ],
+      "expected_status": "overlap_found",
+      "category": "plain_exact",
+      "note": "Advel 400 mg versus Advel 200 mg; same mapped active ingredient"
+    },
+    {
+      "id": "R10",
+      "brand_ids": [
+        17213,
+        30906
+      ],
+      "expected_overlap": [
+        "metformin"
+      ],
+      "expected_status": "overlap_found",
+      "category": "multi",
+      "note": "Adlinameg and Ajardy M share metformin; other ingredients differ"
+    }
+  ]
+}

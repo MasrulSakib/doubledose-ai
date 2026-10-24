@@ -4,13 +4,15 @@ from collections import defaultdict
 
 from app.models.medicine import Medicine
 from app.schemas.medicine import SameClassWarning
+from app.services.ingredient_normalizer import canonical_ingredient_key
 
 
 def normalize_ingredient_name(name: str) -> str:
     """Normalize a recorded ingredient name for a conservative class lookup."""
     normalized = re.sub(r"\([^)]*\)", " ", name.casefold())
     normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
+    # Treat salt forms (e.g. "Esomeprazole Magnesium") as the base ingredient.
+    return canonical_ingredient_key(normalized)
 
 
 # Explicitly curated ingredient-to-class mapping.

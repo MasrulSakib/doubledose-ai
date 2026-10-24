@@ -1,0 +1,26 @@
+{
+  "medicines_total": 21721,
+  "medicines_with_ingredient_data": 20485,
+  "ingredient_coverage_percent": 94.31,
+  "medicines_without_ingredient_data": 1236,
+  "why_unmapped": {
+    "bracketed_generic_left_unmapped": 1030,
+    "other_incl_herbal": 204,
+    "empty_generic_name": 2
+  },
+  "ingredient_links": 24879,
+  "links_with_amount": 3,
+  "distinct_ingredient_rows": 1419,
+  "distinct_active_moieties_after_normalisation": 1374,
+  "ingredients_per_medicine": {
+    "1": 16997,
+    "2": 2769,
+    "3": 580,
+    "4": 92,
+    "5": 46,
+    "6": 1
+  },
+  "ingredient_sharing_product_pairs_exact_names": 1364329,
+  "ingredient_sharing_product_pairs_normalised": 1445441,
+  "pairs_missed_by_exact_names_percent": 5.61
+}

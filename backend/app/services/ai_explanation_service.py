@@ -432,6 +432,39 @@ def _is_detailed_report(
     return True
 
 
+_NEGATION = re.compile(r"(not|never|n't|no|nor|without|cannot)\W+(?:\w+\W+){0,4}$")
+
+_UNSAFE_CLAIMS = re.compile(
+    r"\b(?:you\s+should\s+|you\s+must\s+|please\s+)?"
+    r"(?:stop|start|skip|discontinue|increase|decrease|reduce|double)\s+"
+    r"(?:taking|using|your|the|this|these)\b"
+    r"|\b(?:is|are|be)\s+(?:completely\s+|totally\s+)?safe\b"
+    r"|\bno\s+(?:risk|interaction)s?\b",
+    re.IGNORECASE,
+)
+
+
+def _violates_safety_rules(explanation: str) -> bool:
+    """Reject advice to change medicines or claims that a combination is safe."""
+    for match in _UNSAFE_CLAIMS.finditer(explanation):
+        before = explanation[max(0, match.start() - 40) : match.start()]
+        before = re.split(r"[.!?\n]", before)[-1]  # negation must be in the same sentence
+        if not _NEGATION.search(before):
+            return True
+    return False
+
+
+def _is_grounded(
+    explanation: str,
+    payload: AIExplanationRequest,
+) -> bool:
+    """Require every overlap found by the database to appear in the report."""
+    text = explanation.casefold()
+    return all(
+        item.name.casefold() in text for item in payload.overlapping_ingredients
+    )
+
+
 def _fallback_response(
     payload: AIExplanationRequest,
     references: list[dict],
@@ -466,10 +499,13 @@ async def generate_overlap_explanation(
     payload: AIExplanationRequest,
 ) -> AIExplanationResponse:
     api_key = settings.GROQ_API_KEY.strip()
-    if not api_key:
-        raise RuntimeError("Groq API key is not configured.")
-
     references = await _retrieve_references(payload)
+
+    if not api_key:
+        return _fallback_response(
+            payload, references, "Groq API key is not configured."
+        )
+
     input_data = {
         "medicine_comparison": payload.model_dump(mode="json"),
         "supplementary_references": references,
@@ -523,6 +559,16 @@ async def generate_overlap_explanation(
                     raise ValueError(
                         "Groq response omitted required report sections, "
                         "a selected medicine, or a supplied same-class warning."
+                    )
+
+                if _violates_safety_rules(result.explanation):
+                    raise ValueError(
+                        "Groq response gave medicine-change advice or a safety claim."
+                    )
+
+                if not _is_grounded(result.explanation, payload):
+                    raise ValueError(
+                        "Groq response omitted an overlap found in the database."
                     )
 
                 result.disclaimer = DISCLAIMER

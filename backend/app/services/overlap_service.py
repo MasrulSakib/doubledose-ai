@@ -9,6 +9,10 @@ from app.models.medicine import (
     Medicine,
     MedicineIngredient,
 )
+from app.services.ingredient_normalizer import (
+    canonical_ingredient_key,
+    normalize_ingredient_name,
+)
 from app.schemas.medicine import (
     MedicineComparisonResponse,
     MedicineIngredientDetail,
@@ -38,6 +42,10 @@ def check_ingredient_overlap(
     )
 
     medicines = list(db.scalars(statement).all())
+
+    # Return medicines in the order the caller requested them.
+    request_position = {mid: position for position, mid in enumerate(medicine_ids)}
+    medicines.sort(key=lambda medicine: request_position.get(medicine.id, 0))
 
     found_ids = {medicine.id for medicine in medicines}
     missing_ids = set(medicine_ids) - found_ids
@@ -88,9 +96,11 @@ def check_ingredient_overlap(
             )
         )
 
+    # Group by active moiety so salt, hydrate and spacing variants of the
+    # same ingredient are compared as one ingredient.
     ingredient_matches = defaultdict(
         lambda: {
-            "name": "",
+            "variants": {},
             "medicine_ids": [],
             "medicine_names": [],
         }
@@ -99,24 +109,34 @@ def check_ingredient_overlap(
     for medicine in medicines:
         for association in medicine.ingredients:
             ingredient = association.ingredient
-            match = ingredient_matches[ingredient.id]
+            match = ingredient_matches[canonical_ingredient_key(ingredient.name)]
 
-            match["name"] = ingredient.name
+            match["variants"][ingredient.id] = ingredient.name
 
             if medicine.id not in match["medicine_ids"]:
                 match["medicine_ids"].append(medicine.id)
                 match["medicine_names"].append(medicine.brand_name)
 
-    overlapping_ingredients = [
-        OverlappingIngredient(
-            ingredient_id=ingredient_id,
-            name=ingredient["name"],
-            medicine_ids=ingredient["medicine_ids"],
-            medicine_names=ingredient["medicine_names"],
+    overlapping_ingredients = []
+
+    for match in ingredient_matches.values():
+        if len(match["medicine_ids"]) < 2:
+            continue
+
+        # Report the plainest recorded form (e.g. "Amoxicillin").
+        ingredient_id, name = min(
+            match["variants"].items(),
+            key=lambda item: (len(normalize_ingredient_name(item[1])), item[0]),
         )
-        for ingredient_id, ingredient in ingredient_matches.items()
-        if len(ingredient["medicine_ids"]) >= 2
-    ]
+
+        overlapping_ingredients.append(
+            OverlappingIngredient(
+                ingredient_id=ingredient_id,
+                name=name,
+                medicine_ids=match["medicine_ids"],
+                medicine_names=match["medicine_names"],
+            )
+        )
 
     overlapping_ingredients.sort(key=lambda item: item.name.casefold())
 

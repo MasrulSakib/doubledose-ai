@@ -10,6 +10,10 @@ MIN_BRAND_LENGTH = 4
 MIN_MATCH_SCORE = 45.0
 MAX_RESULTS = 20
 
+# Ingredient (20) + strength (15) + dosage form (5) can never reach
+# MIN_MATCH_SCORE without brand evidence, so unrelated brands are skipped early.
+MAX_SUPPORTING_SCORE = 40.0
+
 # Common dosage forms found in medicine names and database slugs.
 DOSAGE_FORMS = {
     "tablet": ("tablet", "tablets"),
@@ -275,6 +279,9 @@ def _score_medicine(
     source_display_name = medicine.source_display_name or ""
 
     score = _brand_match_score(normalized_ocr, brand_name)
+
+    if score == 0.0 and MAX_SUPPORTING_SCORE < MIN_MATCH_SCORE:
+        return 0.0
 
     score += _ingredient_match_score(
         normalized_ocr,
