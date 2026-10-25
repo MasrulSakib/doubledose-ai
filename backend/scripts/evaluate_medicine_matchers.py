@@ -1,18 +1,3 @@
-"""Benchmark the brand matchers (RapidFuzz, TF-IDF) and, optionally, the OCR stage.
-
-Run from backend/ against the database named by DATABASE_URL:
-
-    python -m scripts.evaluate_medicine_matchers                      # 5 legacy cases only
-    python -m scripts.evaluate_medicine_matchers --synthetic 50       # + noisy OCR text from real records
-    python -m scripts.evaluate_medicine_matchers --synthetic-images 24 # + rendered labels through Tesseract
-    python -m scripts.evaluate_medicine_matchers --cases evaluation/ocr_cases.csv
-    python -m scripts.evaluate_medicine_matchers --images-dir evaluation/images   # real photos
-
-Real photos: put images in a folder with labels.csv (image_file,expected_brand).
-Synthetic cases are stress tests built from the database itself. They show how
-the matchers degrade with noise. They do NOT estimate accuracy on real photos.
-"""
-
 import argparse
 import csv
 import json

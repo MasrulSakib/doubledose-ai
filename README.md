@@ -9,19 +9,21 @@ The project aims to make medicine information easier to understand and help user
 ## Features
 
 - **Medicine search:** Search a database of Bangladeshi medicine products.
-- **Medicine label OCR:** Upload a medicine packaging image to extract text using Tesseract OCR.
-- **Fuzzy medicine matching:** Generate candidate medicine matches from OCR text using RapidFuzz.
-- **Match confirmation:** Review candidate matches when the system cannot confidently identify a medicine.
+- **Medicine label OCR:** Upload medicine packaging images to extract text using Tesseract OCR, with image-processing and fallback support.
+- **Fuzzy medicine matching:** Generate candidate medicine matches using RapidFuzz and TF-IDF approaches.
+- **Candidate ranking:** Use recognized brand names, strengths, and dosage forms to help rank candidate matches.
+- **Match confirmation:** Review and confirm candidate medicines before adding them to the comparison.
 - **Ingredient comparison:** Compare selected medicines for shared recorded active ingredients.
-- **Incomplete-data warnings:** Identify selected medicines with no ingredient records in the current database.
+- **Incomplete-data warnings:** Identify selected medicines without recorded ingredient links.
 - **AI-generated explanations:** Generate explanations of ingredient overlap using the Groq API.
 - **Drug-label references:** Retrieve available reference information through the openFDA API.
 - **Same-class warnings:** Present possible therapeutic-class duplication separately from exact ingredient overlap, when applicable.
-- **Evaluation tools:** Evaluate medicine matching and ingredient-overlap behavior using project evaluation scripts and reports.
+- **Evaluation tools:** Evaluate medicine matching and ingredient-overlap behavior using project scripts and reports.
 
 ## Technology Stack
 
 ### Frontend
+
 - Next.js
 - React
 - TypeScript
@@ -29,6 +31,7 @@ The project aims to make medicine information easier to understand and help user
 - Redux Toolkit
 
 ### Backend
+
 - Python
 - FastAPI
 - SQLAlchemy
@@ -36,56 +39,62 @@ The project aims to make medicine information easier to understand and help user
 - PostgreSQL hosted on Neon
 
 ### AI and Data Processing
-- Tesseract OCR — text extraction from medicine packaging
-- RapidFuzz — fuzzy string matching for medicine identification
-- Groq API — AI-generated explanations
-- openFDA API — external drug-label reference information
-- Bangladeshi medicine product dataset — initial medicine catalogue and ingredient mapping source
+
+- **Tesseract OCR:** Text extraction from medicine packaging.
+- **RapidFuzz:** Fuzzy string matching for medicine identification.
+- **scikit-learn TF-IDF:** Character n-gram similarity-based candidate retrieval and ranking.
+- **Groq API:** AI-generated explanations.
+- **openFDA API:** External drug-label reference information.
+- **Bangladeshi medicine product dataset:** Initial medicine catalogue and ingredient mapping source.
 
 ## System Architecture
 
 ```text
 User
-  |
-  v
+ |
+ v
 Next.js Frontend
-  |
-  +--> Medicine Search
-  |
-  +--> Image Upload
-  |      |
-  |      v
-  |    FastAPI OCR Endpoint
-  |      |
-  |      v
-  |    Extracted Text
-  |      |
-  |      v
-  |    RapidFuzz Candidate Matching
-  |
-  +--> Medicine Selection
-         |
-         v
+ |
+ +--> Medicine Search
+ |
+ +--> Medicine Image Upload
+ |       |
+ |       v
+ |    FastAPI OCR Endpoint
+ |       |
+ |       v
+ |    Extracted Text
+ |       |
+ |       +--> RapidFuzz Matching
+ |       |
+ |       +--> TF-IDF Matching
+ |                 |
+ |                 v
+ |          Candidate Ranking
+ |
+ +--> Medicine Selection
+          |
+          v
       FastAPI Backend
-         |
-         v
+          |
+          v
       PostgreSQL (Neon)
-         |
-         v
-      Active Ingredient Comparison
-         |
-         +--> Overlap Results
-         +--> Incomplete-Data Warnings
-         +--> Same-Class Warnings
-         |
-         v
+          |
+          v
+      Ingredient Comparison
+          |
+          +--> Overlap Results
+          +--> Incomplete-Data Warnings
+          +--> Same-Class Warnings
+          |
+          v
       Groq API / Available Reference Data
-         |
-         v
+          |
+          v
       Results and AI Explanation
 ```
 
-The application separates the frontend, backend API, and database. OCR and medicine matching help identify candidate products, while ingredient comparison uses the records available in the database.
+The application separates the frontend, backend API, and database. OCR and medicine matching help identify candidate products, while ingredient comparison relies on the ingredient records available in the database.
 
 AI-generated explanations provide additional context and should not be treated as verified medical advice.
 
@@ -94,7 +103,7 @@ AI-generated explanations provide additional context and should not be treated a
 1. Search for a medicine or upload an image of its packaging.
 2. Extract text from the uploaded image using OCR.
 3. Generate candidate medicine matches from the extracted text.
-4. Review and confirm the correct medicine when necessary.
+4. Review and confirm the correct medicine.
 5. Select two or more medicines for comparison.
 6. Review shared recorded active ingredients, possible same-class warnings, and missing-data notices.
 7. Read the AI-generated explanation and any available reference information.
@@ -105,38 +114,50 @@ The project includes evaluation scripts for medicine matching and ingredient-ove
 
 ### Medicine Matching
 
-The matching evaluation compares RapidFuzz and TF-IDF on the available evaluation cases.
+The latest recorded manual benchmark compares RapidFuzz and TF-IDF using five hand-typed medicine identification cases.
 
-| Metric | RapidFuzz | TF-IDF |
-|---|---:|---:|
-| Top-1 accuracy | 1.00 | 0.40 |
-| Top-3 accuracy | 1.00 | Not reported here |
-| Mean reciprocal rank | 1.00 | Not reported here |
-| Evaluation cases | 5 | 5 |
+| Metric                       | RapidFuzz | TF-IDF |
+| ---------------------------- | --------: | -----: |
+| Top-1 accuracy               |       80% |    80% |
+| Top-3 accuracy               |      100% |   100% |
+| Mean reciprocal rank (MRR@3) |      0.90 |   0.90 |
+| No-candidate rate            |        0% |     0% |
+| Mean time per query          |    4.00 s | 3.92 s |
+| Evaluation cases             |         5 |      5 |
 
-These results reflect a small evaluation set and should not be interpreted as evidence of equivalent accuracy on all real-world medicine packaging.
+These results indicate that both approaches ranked the expected medicine first in four of five cases and included it within the top three in all five cases.
+
+**Limitations:** This is a small benchmark of clean, manually written queries. It does not establish performance on real-world packaging images, noisy OCR output, or the full Bangladeshi medicine catalogue. The reported query times are environment-dependent.
+
+Similarity scores and adjusted ranking scores are not calibrated probabilities of correctness. Candidate results require user confirmation.
 
 ### Ingredient-Overlap Assessment
 
-The project overlap assessment report evaluated **10 of 10 cases**. Consult the generated report for the underlying true-positive, false-positive, false-negative, precision, recall, and F1 values.
+The project includes an ingredient-overlap assessment covering **10 of 10 evaluation cases**. Consult the generated reports in `backend/evaluation/results/` for the recorded true positives, false positives, false negatives, precision, recall, and F1 score.
 
-Evaluation scripts and reports are maintained in the backend project. The results are intended to assess implemented behavior, not to establish clinical validity.
+Evaluation results assess implemented behavior; they do not establish clinical validity.
+
+### Additional Evaluation Limitations
+
+- Real medicine photographs have not been included in the latest manual benchmark.
+- A trained YOLO detector and detector-labelled evaluation dataset were not available for the documented assessment.
+- A sentence-transformer and FAISS-based matcher is not implemented in the evaluated matching pipeline.
 
 ## Data Coverage and Limitations
 
-The current database coverage report records the following:
+The current database coverage report records the following figures:
 
-| Measure | Reported value |
-|---|---:|
-| Medicine records | 21,721 |
-| Medicines with at least one ingredient link | 20,485 |
-| Medicines without ingredient links | 1,236 |
-| Ingredient-link coverage | 94.31% |
-| Ingredient links with recorded amounts | 3 |
+| Measure                                     | Reported value |
+| ------------------------------------------- | -------------: |
+| Medicine records                            |         21,721 |
+| Medicines with at least one ingredient link |         20,485 |
+| Medicines without ingredient links          |          1,236 |
+| Ingredient-link coverage                    |         94.31% |
+| Ingredient links with recorded amounts      |              3 |
 
 **Important interpretation:** The 94.31% figure means that a medicine has at least one ingredient link. It does not mean that every ingredient has been verified or that combination-product mappings are complete. Recorded ingredient amounts are also insufficient for reliable strength-level comparisons.
 
-The application warns about medicines with no ingredient links, but partially mapped medicines may still have incomplete ingredient information.
+The application warns about medicines with no ingredient links. However, a medicine with at least one ingredient link may still have incomplete ingredient information. Therefore, an overlap result may be incomplete even when the application finds a shared ingredient.
 
 ## Project Structure
 
@@ -151,6 +172,7 @@ doubledose-ai/
 │   │   ├── schemas/
 │   │   └── services/
 │   ├── evaluation/
+│   │   └── results/
 │   ├── scripts/
 │   ├── main.py
 │   └── requirements.txt
@@ -168,8 +190,9 @@ doubledose-ai/
 
 - **Frontend:** https://doubledose-ai.vercel.app
 - **Backend API:** https://doubledose-ai-api.onrender.com
+- **API documentation:** https://doubledose-ai-api.onrender.com/docs
 
-The backend exposes API endpoints for medicine search, ingredient comparison, AI explanations, OCR extraction, OCR-based matching, and matcher evaluation. Available endpoints can be inspected through the deployed API's OpenAPI documentation.
+The backend provides API endpoints for the implemented medicine search, ingredient comparison, AI explanations, OCR extraction, and medicine matching functionality. The deployed OpenAPI documentation lists the available endpoints.
 
 ## Running Locally
 
@@ -193,7 +216,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Configure the backend environment variables in the appropriate environment file, including the database connection and Groq API key. Use the environment-variable names expected by the application and keep credentials out of source control.
+Configure the backend environment variables using the names expected by the application. These include the database connection settings and Groq API key. Keep credentials out of source control.
 
 Start the FastAPI server:
 
@@ -201,11 +224,11 @@ Start the FastAPI server:
 uvicorn main:app --reload
 ```
 
-The local API should then be available at:
+The local API should be available at:
 
 `http://127.0.0.1:8000`
 
-Interactive API documentation is available at:
+Interactive API documentation:
 
 `http://127.0.0.1:8000/docs`
 
@@ -218,13 +241,13 @@ npm install
 npm run dev
 ```
 
-Configure the backend API URL using the environment variable expected by the frontend. For the deployed frontend, the backend URL must point to the deployed API.
+Configure the frontend's backend API URL using the environment variable expected by the application. For the deployed frontend, this must point to the deployed backend API.
 
 Open:
 
 `http://localhost:3000`
 
-If your repository uses a different package manager or dependency lockfile, follow the existing project configuration.
+If the repository uses a different package manager or dependency lockfile, follow the existing project configuration.
 
 ## Responsible Use and Safety
 
@@ -234,9 +257,9 @@ DoubleDose AI does not replace a pharmacist, physician, or other qualified healt
 - A fuzzy-matching result is a candidate, not proof of product equivalence.
 - Missing or incomplete ingredient mappings can cause the application to miss overlaps.
 - Shared ingredients are not the only source of potential medication interactions.
-- The application does not establish whether a combination is safe for an individual.
+- The application does not establish whether a medicine combination is safe for an individual.
 - AI-generated explanations may contain inaccurate or incomplete information.
-- openFDA information may describe US-market products and may not apply directly to a medicine sold in Bangladesh.
+- openFDA information may describe US-market products and may not apply directly to medicines sold in Bangladesh.
 - The project has not been clinically validated as a medical device.
 
 Always verify medicine information against the actual packaging and consult a qualified healthcare professional before changing medication, combining medicines, or making treatment decisions.
