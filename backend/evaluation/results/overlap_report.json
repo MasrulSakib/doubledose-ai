@@ -1,19 +1,19 @@
 {
-  "cases_file": "overlap_cases.json",
-  "cases_total": 36,
-  "cases_evaluated": 36,
+  "cases_file": "overlap_cases_reconstructed.json",
+  "cases_total": 10,
+  "cases_evaluated": 10,
   "cases_unresolved_brand_ids": [],
   "combination_level": {
-    "tp": 21,
+    "tp": 8,
     "fp": 0,
     "fn": 0,
     "precision": 1.0,
     "recall": 1.0,
     "f1": 1.0,
-    "tn": 15
+    "tn": 2
   },
   "ingredient_level": {
-    "tp": 23,
+    "tp": 8,
     "fp": 0,
     "fn": 0,
     "precision": 1.0,
@@ -21,33 +21,29 @@
     "f1": 1.0
   },
   "status_accuracy": 1.0,
-  "request_order_preserved": 36,
+  "request_order_preserved": 10,
   "by_category": {
-    "plain_exact": {
-      "cases": 6,
-      "status_correct": 6
-    },
     "salt_or_format_variant": {
-      "cases": 10,
-      "status_correct": 10
-    },
-    "same_class_no_exact_overlap": {
-      "cases": 6,
-      "status_correct": 6
-    },
-    "unrelated": {
-      "cases": 2,
-      "status_correct": 2
+      "cases": 4,
+      "status_correct": 4
     },
     "multi": {
-      "cases": 7,
-      "status_correct": 7
+      "cases": 3,
+      "status_correct": 3
+    },
+    "unrelated": {
+      "cases": 1,
+      "status_correct": 1
     },
     "incomplete_data": {
-      "cases": 5,
-      "status_correct": 5
+      "cases": 1,
+      "status_correct": 1
+    },
+    "plain_exact": {
+      "cases": 1,
+      "status_correct": 1
     }
   },
   "failures": [],
-  "label_caveat": "Hand-labelled ingredient-overlap cases built from real records in data/medicine.csv. Labels were written by the developer's assistant from the generic-name column using standard pharmacology (same active moiety = overlap; same class but different moiety = no exact overlap). They have NOT been verified by a pharmacist."
+  "label_caveat": "Reconstructed preliminary overlap regression evaluation using verified BDDrugBank source IDs and current database mappings. Expected labels are provisional and have not been independently verified by a pharmacist. This is a developer regression set, not representative clinical validation."
 }

@@ -57,7 +57,7 @@ def check_ingredient_overlap(
         medicine.id
         for medicine in medicines
         if not medicine.ingredients
-    )
+)
 
     medicine_details = []
 
