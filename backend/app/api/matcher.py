@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.matcher import (
     MatcherComparisonRequest,
@@ -34,11 +35,17 @@ def compare_medicine_matchers(
         limit=payload.limit,
     )
 
-    semantic_results = match_medicines_semantic(
-        db=db,
-        extracted_text=payload.extracted_text,
-        limit=payload.limit,
-    )
+    semantic_results = []
+
+    if settings.ENABLE_SEMANTIC_MATCHING:
+        try:
+            semantic_results = match_medicines_semantic(
+                db=db,
+                extracted_text=payload.extracted_text,
+                limit=payload.limit,
+            )
+        except Exception:
+            semantic_results = []
 
     return {
         "rapidfuzz": rapidfuzz_results,

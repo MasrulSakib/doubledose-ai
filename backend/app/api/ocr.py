@@ -1,5 +1,9 @@
 import re
 from io import BytesIO
+from app.core.config import settings
+
+import logging
+logger = logging.getLogger(__name__)
 
 import pytesseract
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -181,6 +185,7 @@ class OCRMatchRequest(BaseModel):
 
 
 
+
 @router.post("/match")
 def match_ocr_medicines(
     payload: OCRMatchRequest,
@@ -188,14 +193,21 @@ def match_ocr_medicines(
 ):
     """Match extracted OCR text against the medicine database."""
 
-    try:
-        matches = match_medicines_semantic(
-            db=db,
-            extracted_text=payload.extracted_text,
-            limit=payload.limit,
-        )
-    except Exception:
-        # Preserve OCR matching if semantic matching is unavailable.
+    matches = []
+
+    if settings.ENABLE_SEMANTIC_MATCHING:
+        try:
+            matches = match_medicines_semantic(
+                db=db,
+                extracted_text=payload.extracted_text,
+                limit=payload.limit,
+            )
+        except Exception:
+            logger.exception(
+                "Semantic matching unavailable; using OCR fallback."
+            )
+
+    if not matches:
         matches = match_medicines_from_ocr(
             db=db,
             extracted_text=payload.extracted_text,

@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+psycopg://postgres:password@localhost:5432/doubledose_ai"
 
+    ENABLE_SEMANTIC_MATCHING: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

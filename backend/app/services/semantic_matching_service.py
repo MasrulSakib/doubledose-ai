@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -8,9 +7,6 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
 from sqlalchemy.orm import Session
 
 from app.models.medicine import Medicine
@@ -21,7 +17,7 @@ DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_CANDIDATE_LIMIT = 10
 MAX_CANDIDATE_LIMIT = 50
 
-_model: SentenceTransformer | None = None
+_model: Any = None
 _model_name_loaded: str | None = None
 _cache_lock = threading.RLock()
 
@@ -45,8 +41,10 @@ def _normalize_text(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def _get_model() -> SentenceTransformer:
+def _get_model() -> Any:
     global _model, _model_name_loaded
+
+    from sentence_transformers import SentenceTransformer
 
     model_name = (
         os.getenv("SENTENCE_TRANSFORMER_MODEL", DEFAULT_MODEL_NAME).strip()
@@ -135,8 +133,11 @@ def _record_for(medicine: Medicine, document: str) -> dict[str, Any]:
 
 def _build_catalogue_index(
     db: Session,
-    model: SentenceTransformer,
+    model: Any,
 ) -> MedicineIndex:
+    import faiss
+    import numpy as np
+
     medicines = db.query(Medicine).order_by(Medicine.id.asc()).all()
 
     records: list[dict[str, Any]] = []
@@ -185,7 +186,7 @@ def clear_semantic_catalogue_cache() -> None:
 
 def _get_catalogue_index(
     db: Session,
-    model: SentenceTransformer,
+    model: Any,
 ) -> MedicineIndex:
     global _catalogue_cache
 
@@ -216,14 +217,12 @@ def _rerank_score(
     score = max(0.0, min(1.0, semantic_score)) * 100
     query_tokens = set(query_normalized.split())
 
-    # Exact brand match: prioritize the requested product over similar brands.
     if brand and re.search(
         rf"(?<![a-z0-9]){re.escape(brand)}(?![a-z0-9])",
         query_normalized,
     ):
         score += 20.0
 
-    # Ingredient matching.
     if generic:
         candidate_ingredients = {
             ingredient.strip()
@@ -255,10 +254,8 @@ def _rerank_score(
             if all_ingredients_mentioned:
                 score += 8.0
             else:
-                # The query does not explicitly mention every ingredient.
                 score -= 15.0
 
-    # Manufacturer match, including abbreviated company names.
     manufacturer_tokens = manufacturer.split()
 
     if manufacturer:
@@ -273,7 +270,6 @@ def _rerank_score(
         if manufacturer_matches:
             score += 8.0
 
-    # Strength match or conflict.
     query_strengths = _extract_strengths(query_normalized)
     candidate_strengths = _extract_strengths(record.get("strength"))
 
@@ -283,7 +279,6 @@ def _rerank_score(
         else:
             score -= 18.0
 
-    # Dosage-form match or conflict.
     query_forms = _extract_dosage_forms(query_normalized)
     candidate_forms = _extract_dosage_forms(dosage_form)
 
@@ -302,6 +297,8 @@ def match_medicines_semantic(
     limit: int = DEFAULT_CANDIDATE_LIMIT,
 ) -> list[dict[str, Any]]:
     """Retrieve and rerank semantic medicine candidates for confirmation."""
+    import numpy as np
+
     query = _normalize_text(extracted_text)
 
     if len(query) < 2:
