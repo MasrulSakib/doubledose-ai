@@ -14,10 +14,11 @@ class MatcherCandidate(BaseModel):
     strength: str | None = None
     match_score: float = Field(ge=0, le=100)
     needs_confirmation: bool
-    ranking_score: float | None = Field(default=None, ge=0, le=100)
+    ranking_score: float | None = Field(default=None, ge=0, le=120)
 
 
 class MatcherComparisonResponse(BaseModel):
     rapidfuzz: list[MatcherCandidate]
     tfidf: list[MatcherCandidate]
+    semantic_faiss: list[MatcherCandidate]
     extracted_text: str

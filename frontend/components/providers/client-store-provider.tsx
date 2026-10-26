@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, type ReactNode } from "react";
@@ -8,13 +7,13 @@ import { makeStore } from "@/lib/store";
 import type { AppStore } from "@/lib/store";
 
 type ClientStoreProviderProps = {
-    children: ReactNode;
+  children: ReactNode;
 };
 
 export default function ClientStoreProvider({
-    children,
+  children,
 }: ClientStoreProviderProps) {
-    const [store] = useState<AppStore>(() => makeStore());
+  const [store] = useState<AppStore>(() => makeStore());
 
-    return <Provider store={store}>{children}</Provider>;
+  return <Provider store={store}>{children}</Provider>;
 }

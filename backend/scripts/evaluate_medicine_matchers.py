@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.models.medicine import Medicine
 from app.services.ocr_matching_service import match_medicines_from_ocr
 from app.services.tfidf_matching_service import match_medicines_tfidf
+from app.services.semantic_matching_service import match_medicines_semantic
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 MIN_BRAND_LENGTH = 4  # shortest brand the RapidFuzz matcher will consider
@@ -23,6 +24,7 @@ SCORE_BINS = [(0, 45), (45, 65), (65, 80), (80, 101)]
 MATCHERS = {
     "rapidfuzz": match_medicines_from_ocr,
     "tfidf": match_medicines_tfidf,
+    "semantic": match_medicines_semantic,
 }
 
 # Planned matcher that is not implemented in this repository yet.

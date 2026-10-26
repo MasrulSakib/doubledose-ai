@@ -33,7 +33,7 @@ export default function Home() {
   const ocr = useMedicineOCR();
   const overlap = useMedicineOverlap();
 
-  const selectedMedicineIds = selectedMedicines.map((medicine) => medicine.id);
+  const selectedMedicineIds = selectedMedicines.map((m) => m.id);
   const canCheck = selectedMedicines.length >= 2 && selectedMedicines.length <= 5;
   const comparisonBusy = overlap.checking || overlap.aiLoading;
 
@@ -41,9 +41,9 @@ export default function Home() {
     if (
       selectedMedicines.some((item) => item.id === medicine.id) ||
       selectedMedicines.length >= 5
-    ) {
+    )
       return;
-    }
+
     dispatch(addMedicine(medicine));
     search.clearSearch();
     overlap.resetResults();
@@ -55,13 +55,12 @@ export default function Home() {
   }
 
   function handleAddOCRCandidate(candidate: OCRMedicineMatch) {
-    const medicine: Medicine = {
+    handleAddMedicine({
       id: candidate.medicine_id,
       brand_name: candidate.brand_name,
       generic_name: candidate.generic_name,
       source_display_name: candidate.strength,
-    };
-    handleAddMedicine(medicine);
+    });
   }
 
   function handleClearMedicines() {
@@ -70,23 +69,24 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="min-h-screen bg-[#f8faf9] text-slate-900">
       <SiteHeader />
       <HeroSection />
 
       <section
         id="medicine-checker"
-        className="mx-auto w-[calc(100%-2rem)] max-w-290 scroll-mt-24 pb-12 sm:w-[calc(100%-3rem)] sm:pb-16"
+        className="mx-auto w-[calc(100%-2rem)] max-w-[1160px] scroll-mt-24 pb-12 sm:w-[calc(100%-3rem)] sm:pb-16"
       >
-        <div className="mb-7">
-          <p className="text-[10px] font-extrabold tracking-[1.6px] text-emerald-700">
-            MEDICINE SAFETY WORKSPACE
+        <div className="mb-8 animate-fade-in">
+          <p className="text-[10px] font-extrabold tracking-[.16em] text-emerald-700 uppercase">
+            Medicine safety workspace
           </p>
-          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-emerald-950 sm:text-3xl">
+          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
             Check your medicines
           </h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500 sm:text-base">
-            Search the medicine database or upload a package image to identify possible ingredient overlaps.
+            Search the medicine database or upload a package image to identify
+            possible ingredient overlaps.
           </p>
         </div>
 
@@ -99,28 +99,34 @@ export default function Home() {
             error={ocr.ocrError}
           />
           {ocr.ocrMessage && (
-            <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800" role="status">
+            <p
+              className="rounded-xl border border-emerald-200/60 bg-emerald-50/70 px-4 py-3 text-sm leading-6 text-emerald-800"
+              role="status"
+            >
               {ocr.ocrMessage}
             </p>
           )}
         </div>
 
         {ocr.ocrText && (
-          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <label htmlFor="ocr-extracted-text" className="mb-3 block text-sm font-bold text-slate-800">
+          <section className="mt-6 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+            <label
+              htmlFor="ocr-extracted-text"
+              className="mb-3 block text-sm font-bold text-slate-800"
+            >
               Review extracted text
             </label>
             <textarea
               id="ocr-extracted-text"
-              className="min-h-32 w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              className="min-h-32 w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
               rows={5}
               value={ocr.ocrText}
-              onChange={(event) => ocr.updateOCRText(event.target.value)}
+              onChange={(e) => ocr.updateOCRText(e.target.value)}
               placeholder="Extracted medicine text appears here..."
             />
             <button
               type="button"
-              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg border border-emerald-200 bg-white px-4 py-2 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => void ocr.rematchEditedOCRText()}
               disabled={ocr.ocrLoading || !ocr.ocrText.trim()}
             >
@@ -163,7 +169,7 @@ export default function Home() {
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleClearMedicines}
               disabled={selectedMedicines.length === 0}
             >
@@ -171,12 +177,15 @@ export default function Home() {
             </button>
             <button
               type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-600/25 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:translate-y-0"
               onClick={() => void overlap.checkOverlap(selectedMedicines)}
               disabled={!canCheck || comparisonBusy}
             >
               {comparisonBusy && (
-                <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                />
               )}
               {overlap.checking
                 ? "Checking ingredients..."
@@ -192,7 +201,10 @@ export default function Home() {
             </p>
           )}
           {overlap.checkError && (
-            <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800" role="alert">
+            <p
+              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800"
+              role="alert"
+            >
               {overlap.checkError}
             </p>
           )}

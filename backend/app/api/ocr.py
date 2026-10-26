@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.services.detection_service import detect_label_crops
 from app.services.ocr_matching_service import match_medicines_from_ocr
 from app.services.ocr_service import extract_text_from_image
+from app.services.semantic_matching_service import match_medicines_semantic
 
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
@@ -178,6 +179,8 @@ class OCRMatchRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=20)
 
 
+
+
 @router.post("/match")
 def match_ocr_medicines(
     payload: OCRMatchRequest,
@@ -185,11 +188,19 @@ def match_ocr_medicines(
 ):
     """Match extracted OCR text against the medicine database."""
 
-    matches = match_medicines_from_ocr(
-        db=db,
-        extracted_text=payload.extracted_text,
-        limit=payload.limit,
-    )
+    try:
+        matches = match_medicines_semantic(
+            db=db,
+            extracted_text=payload.extracted_text,
+            limit=payload.limit,
+        )
+    except Exception:
+        # Preserve OCR matching if semantic matching is unavailable.
+        matches = match_medicines_from_ocr(
+            db=db,
+            extracted_text=payload.extracted_text,
+            limit=payload.limit,
+        )
 
     return {
         "matches": matches,
@@ -203,3 +214,4 @@ def match_ocr_medicines(
             )
         ),
     }
+

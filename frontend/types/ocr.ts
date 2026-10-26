@@ -17,7 +17,9 @@ export interface OCRMedicineMatch {
   generic_name: string | null;
   strength: string | null;
   match_score: number;
+  ranking_score: number;
   needs_confirmation: boolean;
+  matcher: string;
 }
 
 export interface OCRMatchResponse {
