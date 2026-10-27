@@ -19,3 +19,9 @@ rapidfuzz>=3.9
 numpy>=1.26
 opencv-python-headless>=4.9
 scikit-learn>=1.5
+
+# Lightweight semantic matching with a prebuilt FAISS index
+faiss-cpu==1.15.1
+onnxruntime==1.31.0
+tokenizers==0.22.2
+huggingface-hub==0.36.2

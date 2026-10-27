@@ -1,12 +1,16 @@
+
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+import numpy as np
 from sqlalchemy.orm import Session
 
 from app.models.medicine import Medicine
@@ -16,9 +20,16 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_CANDIDATE_LIMIT = 10
 MAX_CANDIDATE_LIMIT = 50
+ENCODE_BATCH_SIZE = 16
+MAX_SEQUENCE_LENGTH = 256
+EMBEDDING_DIMENSION = 384
+
+# semantic_matching_service.py is located at backend/app/services/.
+DEFAULT_INDEX_DIR = Path(__file__).resolve().parents[2] / "data" / "semantic"
 
 _model: Any = None
 _model_name_loaded: str | None = None
+_tokenizer: Any = None
 _cache_lock = threading.RLock()
 
 
@@ -42,9 +53,12 @@ def _normalize_text(value: str | None) -> str:
 
 
 def _get_model() -> Any:
-    global _model, _model_name_loaded
+    """Load the quantized ONNX model and lightweight tokenizer."""
+    global _model, _model_name_loaded, _tokenizer
 
-    from sentence_transformers import SentenceTransformer
+    import onnxruntime as ort
+    from huggingface_hub import hf_hub_download
+    from tokenizers import Tokenizer
 
     model_name = (
         os.getenv("SENTENCE_TRANSFORMER_MODEL", DEFAULT_MODEL_NAME).strip()
@@ -52,11 +66,138 @@ def _get_model() -> Any:
     )
 
     with _cache_lock:
-        if _model is None or _model_name_loaded != model_name:
-            _model = SentenceTransformer(model_name)
-            _model_name_loaded = model_name
+        if _model is not None and _model_name_loaded == model_name:
+            return _model
 
+        logger.info("Loading direct ONNX inference session: %s", model_name)
+
+        model_path = hf_hub_download(
+            repo_id=model_name,
+            filename="onnx/model_quint8_avx2.onnx",
+        )
+
+        tokenizer_path = hf_hub_download(
+            repo_id=model_name,
+            filename="tokenizer.json",
+        )
+
+        tokenizer = Tokenizer.from_file(tokenizer_path)
+        tokenizer.enable_truncation(max_length=MAX_SEQUENCE_LENGTH)
+
+        pad_token_id = tokenizer.token_to_id("[PAD]")
+        if pad_token_id is None:
+            raise RuntimeError("The tokenizer has no [PAD] token.")
+
+        # The tokenizers library uses longest-sequence padding by default
+        # when padding is enabled without a fixed length.
+        tokenizer.enable_padding(
+            pad_id=pad_token_id,
+            pad_token="[PAD]",
+        )
+
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        options.graph_optimization_level = (
+            ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+        )
+
+        session = ort.InferenceSession(
+            model_path,
+            sess_options=options,
+            providers=["CPUExecutionProvider"],
+        )
+
+        input_names = {item.name for item in session.get_inputs()}
+        required_inputs = {
+            "input_ids",
+            "attention_mask",
+            "token_type_ids",
+        }
+
+        if not required_inputs.issubset(input_names):
+            raise RuntimeError(
+                f"Unexpected ONNX inputs: {sorted(input_names)}"
+            )
+
+        output_names = {item.name for item in session.get_outputs()}
+        if "last_hidden_state" not in output_names:
+            raise RuntimeError(
+                f"Unexpected ONNX outputs: {sorted(output_names)}"
+            )
+
+        _model = session
+        _tokenizer = tokenizer
+        _model_name_loaded = model_name
+
+        logger.info("Direct ONNX model and tokenizer loaded successfully")
         return _model
+
+
+def _get_tokenizer() -> Any:
+    _get_model()
+    return _tokenizer
+
+
+def _encode_texts(
+    texts: list[str],
+    batch_size: int = ENCODE_BATCH_SIZE,
+) -> np.ndarray:
+    """Create normalized sentence embeddings using direct ONNX inference."""
+    if not texts:
+        return np.empty((0, EMBEDDING_DIMENSION), dtype=np.float32)
+
+    model = _get_model()
+    tokenizer = _get_tokenizer()
+    batch_size = max(1, batch_size)
+    embeddings: list[np.ndarray] = []
+
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        encoded = tokenizer.encode_batch(batch)
+
+        input_ids = np.asarray(
+            [item.ids for item in encoded], dtype=np.int64
+        )
+        attention_mask = np.asarray(
+            [item.attention_mask for item in encoded], dtype=np.int64
+        )
+        token_type_ids = np.asarray(
+            [item.type_ids for item in encoded], dtype=np.int64
+        )
+
+        input_feed = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "token_type_ids": token_type_ids,
+        }
+
+        token_embeddings = model.run(
+            ["last_hidden_state"], input_feed
+        )[0]
+
+        mask = attention_mask[:, :, np.newaxis].astype(
+            np.float32, copy=False
+        )
+        summed = np.sum(token_embeddings * mask, axis=1)
+        counts = np.maximum(mask.sum(axis=1), 1e-9)
+        sentence_embeddings = summed / counts
+
+        norms = np.linalg.norm(
+            sentence_embeddings, axis=1, keepdims=True
+        )
+        sentence_embeddings /= np.maximum(norms, 1e-12)
+
+        embeddings.append(
+            np.asarray(sentence_embeddings, dtype=np.float32)
+        )
+
+        del encoded, input_feed, input_ids, attention_mask, token_type_ids
+        del token_embeddings, mask, summed, counts
+        del sentence_embeddings, norms
+
+    return np.concatenate(embeddings, axis=0)
 
 
 def _medicine_document(medicine: Medicine) -> str:
@@ -131,49 +272,91 @@ def _record_for(medicine: Medicine, document: str) -> dict[str, Any]:
     }
 
 
-def _build_catalogue_index(
-    db: Session,
-    model: Any,
-) -> MedicineIndex:
+def _load_catalogue_index(model_name: str) -> MedicineIndex:
+    """Load the prebuilt FAISS index and its matching metadata."""
     import faiss
-    import numpy as np
 
-    medicines = db.query(Medicine).order_by(Medicine.id.asc()).all()
+    index_dir = Path(
+        os.getenv("SEMANTIC_INDEX_DIR", str(DEFAULT_INDEX_DIR))
+    ).expanduser()
 
-    records: list[dict[str, Any]] = []
-    documents: list[str] = []
+    index_path = index_dir / "medicines.faiss"
+    records_path = index_dir / "medicines.json"
 
-    for medicine in medicines:
-        if not (medicine.brand_name or "").strip():
-            continue
+    missing_files = [
+        str(path)
+        for path in (index_path, records_path)
+        if not path.is_file()
+    ]
 
-        document = _medicine_document(medicine)
+    if missing_files:
+        raise FileNotFoundError(
+            "Semantic index artifacts are missing: "
+            + ", ".join(missing_files)
+            + ". Generate the artifacts with "
+            "`python -m scripts.build_semantic_index` "
+            "and include them in the deployment."
+        )
 
-        if not document:
-            continue
+    logger.info("Loading saved semantic index from %s", index_dir)
 
-        records.append(_record_for(medicine, document))
-        documents.append(document)
+    index = faiss.read_index(str(index_path))
 
-    model_name = _model_name_loaded or DEFAULT_MODEL_NAME
+    with records_path.open("r", encoding="utf-8") as file:
+        records = json.load(file)
 
-    if not documents:
-        return MedicineIndex([], faiss.IndexFlatIP(1), model_name)
+    if not isinstance(records, list):
+        raise RuntimeError(
+            f"Invalid semantic metadata format: {records_path}"
+        )
 
-    vectors = model.encode(
-        documents,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-        batch_size=64,
+    if index.d != EMBEDDING_DIMENSION:
+        raise RuntimeError(
+            f"Semantic index dimension mismatch: expected "
+            f"{EMBEDDING_DIMENSION}, got {index.d}."
+        )
+
+    if index.ntotal != len(records):
+        raise RuntimeError(
+            f"Semantic index/metadata mismatch: index contains "
+            f"{index.ntotal} vectors, but metadata contains "
+            f"{len(records)} records."
+        )
+
+    required_fields = {
+        "medicine_id",
+        "brand_name",
+        "generic_name",
+        "strength",
+        "dosage_form",
+        "manufacturer",
+        "document",
+    }
+
+    for position, record in enumerate(records):
+        if not isinstance(record, dict):
+            raise RuntimeError(
+                f"Invalid metadata record at position {position}."
+            )
+
+        missing_fields = required_fields.difference(record)
+
+        if missing_fields:
+            raise RuntimeError(
+                f"Metadata record {position} is missing fields: "
+                f"{sorted(missing_fields)}"
+            )
+
+    logger.info(
+        "Saved semantic index loaded: %s medicine records",
+        index.ntotal,
     )
 
-    vectors = np.asarray(vectors, dtype=np.float32)
-
-    index = faiss.IndexFlatIP(vectors.shape[1])
-    index.add(vectors)
-
-    return MedicineIndex(records, index, model_name)
+    return MedicineIndex(
+        records=records,
+        index=index,
+        model_name=model_name,
+    )
 
 
 def clear_semantic_catalogue_cache() -> None:
@@ -186,8 +369,9 @@ def clear_semantic_catalogue_cache() -> None:
 
 def _get_catalogue_index(
     db: Session,
-    model: Any,
+    model: Any = None,
 ) -> MedicineIndex:
+    """Return the cached index, loading saved artifacts when needed."""
     global _catalogue_cache
 
     model_name = _model_name_loaded or DEFAULT_MODEL_NAME
@@ -197,7 +381,9 @@ def _get_catalogue_index(
             _catalogue_cache is None
             or _catalogue_cache.model_name != model_name
         ):
-            _catalogue_cache = _build_catalogue_index(db, model)
+            # Intentionally load the prebuilt artifacts rather than
+            # rebuilding embeddings from the database at runtime.
+            _catalogue_cache = _load_catalogue_index(model_name)
 
         return _catalogue_cache
 
@@ -297,8 +483,6 @@ def match_medicines_semantic(
     limit: int = DEFAULT_CANDIDATE_LIMIT,
 ) -> list[dict[str, Any]]:
     """Retrieve and rerank semantic medicine candidates for confirmation."""
-    import numpy as np
-
     query = _normalize_text(extracted_text)
 
     if len(query) < 2:
@@ -307,20 +491,13 @@ def match_medicines_semantic(
     safe_limit = max(1, min(int(limit), MAX_CANDIDATE_LIMIT))
 
     try:
-        model = _get_model()
-        catalogue = _get_catalogue_index(db, model)
+        _get_model()
+        catalogue = _get_catalogue_index(db)
 
         if not catalogue.records:
             return []
 
-        query_vector = model.encode(
-            [query],
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-
-        query_vector = np.asarray(query_vector, dtype=np.float32)
+        query_vector = _encode_texts([query], batch_size=1)
 
         candidate_count = min(
             max(safe_limit * 30, 100),
