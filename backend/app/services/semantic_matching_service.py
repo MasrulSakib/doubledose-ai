@@ -404,33 +404,51 @@ def _get_catalogue_index(
 
 
 
+
 def _rerank_score(
     query: str,
     semantic_score: float,
     record: dict[str, Any],
 ) -> float:
-    """Rerank candidates while prioritizing strength and dosage-form compatibility."""
+    """Prioritize medicine strength and dosage-form compatibility."""
     query_normalized = _normalize_text(query)
     brand = _normalize_text(record.get("brand_name"))
     generic = _normalize_text(record.get("generic_name"))
     manufacturer = _normalize_text(record.get("manufacturer"))
 
-    candidate_description = " ".join(
-        str(record.get(field) or "")
-        for field in ("dosage_form", "strength", "document")
+    candidate_description = _normalize_text(
+        " ".join(
+            str(record.get(field) or "")
+            for field in ("dosage_form", "strength", "document")
+        )
     )
-    candidate_description = _normalize_text(candidate_description)
 
+    query_strengths = _extract_strengths(query_normalized)
+    candidate_strengths = _extract_strengths(candidate_description)
+    query_forms = _extract_dosage_forms(query_normalized)
+    candidate_forms = _extract_dosage_forms(candidate_description)
+
+    strength_match = (
+        not query_strengths
+        or bool(query_strengths.intersection(candidate_strengths))
+    )
+    form_match = (
+        not query_forms
+        or bool(query_forms.intersection(candidate_forms))
+    )
+
+    # Keep semantic similarity as supporting evidence.
     score = max(0.0, min(1.0, semantic_score)) * 100
     query_tokens = set(query_normalized.split())
 
-    # Brand and ingredient evidence.
+    # Brand evidence.
     if brand and re.search(
         rf"(?<![a-z0-9]){re.escape(brand)}(?![a-z0-9])",
         query_normalized,
     ):
-        score += 20.0
+        score += 15.0
 
+    # Active ingredient evidence.
     if generic:
         ingredients = {
             ingredient.strip()
@@ -448,11 +466,13 @@ def _rerank_score(
         }
 
         if len(ingredients) == 1 and mentioned:
-            score += 8.0
+            score += 10.0
         elif len(ingredients) > 1:
-            score += 8.0 if mentioned == ingredients else -15.0
+            score += 10.0 if mentioned == ingredients else -15.0
 
+    # Manufacturer evidence.
     manufacturer_tokens = manufacturer.split()
+
     if manufacturer and (
         manufacturer in query_normalized
         or (
@@ -460,30 +480,25 @@ def _rerank_score(
             and manufacturer_tokens[0] in query_tokens
         )
     ):
-        score += 8.0
+        score += 5.0
 
-    # Strength compatibility.
-    query_strengths = _extract_strengths(query_normalized)
-    candidate_strengths = _extract_strengths(candidate_description)
-
+    # Explicit attribute compatibility.
     if query_strengths:
-        if query_strengths.intersection(candidate_strengths):
-            score += 8.0
-        else:
-            score -= 35.0
-
-    # Dosage-form compatibility.
-    query_forms = _extract_dosage_forms(query_normalized)
-    candidate_forms = _extract_dosage_forms(candidate_description)
+        score += 15.0 if strength_match else -25.0
 
     if query_forms:
-        if query_forms.intersection(candidate_forms):
-            score += 6.0
-        else:
-            score -= 35.0
+        score += 15.0 if form_match else -25.0
 
-    return round(max(0.0, min(120.0, score)), 1)
+    if strength_match and form_match:
+        compatibility_tier = 30.0
+    elif strength_match or form_match:
+        compatibility_tier = 0.0
+    else:
+        compatibility_tier = -30.0
 
+    score += compatibility_tier
+
+    return round(max(0.0, min(150.0, score)), 1)
 
 def match_medicines_semantic(
     db: Session,
