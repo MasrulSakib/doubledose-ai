@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -75,7 +74,6 @@ def _get_model() -> Any:
             repo_id=model_name,
             filename="onnx/model_quint8_avx2.onnx",
         )
-
         tokenizer_path = hf_hub_download(
             repo_id=model_name,
             filename="tokenizer.json",
@@ -88,8 +86,6 @@ def _get_model() -> Any:
         if pad_token_id is None:
             raise RuntimeError("The tokenizer has no [PAD] token.")
 
-        # The tokenizers library uses longest-sequence padding by default
-        # when padding is enabled without a fixed length.
         tokenizer.enable_padding(
             pad_id=pad_token_id,
             pad_token="[PAD]",
@@ -217,6 +213,7 @@ def _medicine_document(medicine: Medicine) -> str:
 
 
 def _extract_strengths(text: str | None) -> set[str]:
+    """Extract strengths and concentration numerators from text."""
     normalized = _normalize_text(text)
 
     pattern = (
@@ -225,23 +222,32 @@ def _extract_strengths(text: str | None) -> set[str]:
         r"(?:\s*/\s*\d+(?:\.\d+)?\s*(?:ml|mg|g))?\b"
     )
 
-    return {
-        re.sub(r"\s+", "", match)
-        for match in re.findall(pattern, normalized)
-    }
+    strengths: set[str] = set()
+
+    for match in re.findall(pattern, normalized):
+        compact = re.sub(r"\s+", "", match)
+        strengths.add(compact)
+
+        # 120 mg/5 ml can match a query specifying 120 mg.
+        # The complete concentration is retained as a separate value.
+        if "/" in compact:
+            strengths.add(compact.split("/", maxsplit=1)[0])
+
+    return strengths
 
 
 def _extract_dosage_forms(text: str | None) -> set[str]:
+    """Detect dosage forms in normal text and concatenated catalogue slugs."""
     normalized = _normalize_text(text)
 
     aliases = {
-        "tablet": ("tablet", "tablets", "tab"),
-        "capsule": ("capsule", "capsules", "cap"),
+        "tablet": ("tablets", "tablet", "tabs", "tab"),
+        "capsule": ("capsules", "capsule", "caps", "cap"),
         "syrup": ("syrup",),
         "suspension": ("suspension",),
-        "injection": ("injection", "injectable"),
+        "injection": ("injection", "injectable", "injections"),
         "infusion": ("infusion",),
-        "suppository": ("suppository", "suppositories"),
+        "suppository": ("suppositories", "suppository"),
         "drops": ("drops", "drop"),
         "cream": ("cream",),
         "ointment": ("ointment",),
@@ -251,11 +257,20 @@ def _extract_dosage_forms(text: str | None) -> set[str]:
     found: set[str] = set()
 
     for canonical, terms in aliases.items():
-        if any(
-            re.search(rf"\b{re.escape(term)}\b", normalized)
-            for term in terms
-        ):
-            found.add(canonical)
+        for term in terms:
+            # Word boundaries handle normal text.
+            if re.search(rf"\b{re.escape(term)}\b", normalized):
+                found.add(canonical)
+                break
+
+            # Slugs may concatenate the brand and dosage form:
+            # napasyrup120-mg5-ml, napasuppository125-mg.
+            if re.search(
+                rf"(?<=[a-z]){re.escape(term)}(?=[0-9\s./-]|$)",
+                normalized,
+            ):
+                found.add(canonical)
+                break
 
     return found
 
@@ -381,8 +396,7 @@ def _get_catalogue_index(
             _catalogue_cache is None
             or _catalogue_cache.model_name != model_name
         ):
-            # Intentionally load the prebuilt artifacts rather than
-            # rebuilding embeddings from the database at runtime.
+            # Load prebuilt artifacts; never rebuild embeddings at runtime.
             _catalogue_cache = _load_catalogue_index(model_name)
 
         return _catalogue_cache
@@ -398,7 +412,17 @@ def _rerank_score(
     brand = _normalize_text(record.get("brand_name"))
     generic = _normalize_text(record.get("generic_name"))
     manufacturer = _normalize_text(record.get("manufacturer"))
-    dosage_form = _normalize_text(record.get("dosage_form"))
+
+    # The dedicated field may be empty. Inspect the complete source
+    # description and document, which can contain dosage-form slugs.
+    candidate_description = " ".join(
+        str(value or "")
+        for value in (
+            record.get("dosage_form"),
+            record.get("strength"),
+            record.get("document"),
+        )
+    )
 
     score = max(0.0, min(1.0, semantic_score)) * 100
     query_tokens = set(query_normalized.split())
@@ -457,7 +481,7 @@ def _rerank_score(
             score += 8.0
 
     query_strengths = _extract_strengths(query_normalized)
-    candidate_strengths = _extract_strengths(record.get("strength"))
+    candidate_strengths = _extract_strengths(candidate_description)
 
     if query_strengths:
         if query_strengths.intersection(candidate_strengths):
@@ -466,7 +490,7 @@ def _rerank_score(
             score -= 18.0
 
     query_forms = _extract_dosage_forms(query_normalized)
-    candidate_forms = _extract_dosage_forms(dosage_form)
+    candidate_forms = _extract_dosage_forms(candidate_description)
 
     if query_forms:
         if query_forms.intersection(candidate_forms):
