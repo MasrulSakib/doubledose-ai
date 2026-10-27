@@ -402,31 +402,29 @@ def _get_catalogue_index(
         return _catalogue_cache
 
 
+
+
 def _rerank_score(
     query: str,
     semantic_score: float,
     record: dict[str, Any],
 ) -> float:
-    """Rerank candidates using semantic similarity and medicine evidence."""
+    """Rerank candidates while prioritizing strength and dosage-form compatibility."""
     query_normalized = _normalize_text(query)
     brand = _normalize_text(record.get("brand_name"))
     generic = _normalize_text(record.get("generic_name"))
     manufacturer = _normalize_text(record.get("manufacturer"))
 
-    # The dedicated field may be empty. Inspect the complete source
-    # description and document, which can contain dosage-form slugs.
     candidate_description = " ".join(
-        str(value or "")
-        for value in (
-            record.get("dosage_form"),
-            record.get("strength"),
-            record.get("document"),
-        )
+        str(record.get(field) or "")
+        for field in ("dosage_form", "strength", "document")
     )
+    candidate_description = _normalize_text(candidate_description)
 
     score = max(0.0, min(1.0, semantic_score)) * 100
     query_tokens = set(query_normalized.split())
 
+    # Brand and ingredient evidence.
     if brand and re.search(
         rf"(?<![a-z0-9]){re.escape(brand)}(?![a-z0-9])",
         query_normalized,
@@ -434,52 +432,37 @@ def _rerank_score(
         score += 20.0
 
     if generic:
-        candidate_ingredients = {
+        ingredients = {
             ingredient.strip()
             for ingredient in generic.split("+")
             if ingredient.strip()
         }
 
-        all_ingredients_mentioned = (
-            bool(candidate_ingredients)
-            and all(
-                re.search(
-                    rf"(?<![a-z0-9]){re.escape(ingredient)}(?![a-z0-9])",
-                    query_normalized,
-                )
-                for ingredient in candidate_ingredients
-            )
-        )
-
-        if len(candidate_ingredients) == 1:
-            ingredient = next(iter(candidate_ingredients))
-
+        mentioned = {
+            ingredient
+            for ingredient in ingredients
             if re.search(
                 rf"(?<![a-z0-9]){re.escape(ingredient)}(?![a-z0-9])",
                 query_normalized,
-            ):
-                score += 8.0
+            )
+        }
 
-        elif len(candidate_ingredients) > 1:
-            if all_ingredients_mentioned:
-                score += 8.0
-            else:
-                score -= 15.0
+        if len(ingredients) == 1 and mentioned:
+            score += 8.0
+        elif len(ingredients) > 1:
+            score += 8.0 if mentioned == ingredients else -15.0
 
     manufacturer_tokens = manufacturer.split()
-
-    if manufacturer:
-        manufacturer_matches = (
-            manufacturer in query_normalized
-            or (
-                len(manufacturer_tokens) >= 2
-                and manufacturer_tokens[0] in query_tokens
-            )
+    if manufacturer and (
+        manufacturer in query_normalized
+        or (
+            len(manufacturer_tokens) >= 2
+            and manufacturer_tokens[0] in query_tokens
         )
+    ):
+        score += 8.0
 
-        if manufacturer_matches:
-            score += 8.0
-
+    # Strength compatibility.
     query_strengths = _extract_strengths(query_normalized)
     candidate_strengths = _extract_strengths(candidate_description)
 
@@ -487,8 +470,9 @@ def _rerank_score(
         if query_strengths.intersection(candidate_strengths):
             score += 8.0
         else:
-            score -= 18.0
+            score -= 35.0
 
+    # Dosage-form compatibility.
     query_forms = _extract_dosage_forms(query_normalized)
     candidate_forms = _extract_dosage_forms(candidate_description)
 
@@ -496,7 +480,7 @@ def _rerank_score(
         if query_forms.intersection(candidate_forms):
             score += 6.0
         else:
-            score -= 20.0
+            score -= 35.0
 
     return round(max(0.0, min(120.0, score)), 1)
 
