@@ -1,25 +1,102 @@
 # DoubleDose AI
 
-DoubleDose AI is an AI-assisted medicine information and ingredient comparison platform focused on Bangladeshi medicine products. It combines optical character recognition (OCR), multiple medicine-matching approaches, active ingredient comparison, and AI-generated explanations in a single web application.
+### AI-Powered Medicine Ingredient & Interaction Checker
 
-The project aims to help users identify potential duplicate active ingredients and understand medicine information before discussing their medicines with a pharmacist or other qualified healthcare professional.
+DoubleDose AI is an AI-assisted medicine information platform designed to help users inspect medicine ingredients, identify potential ingredient overlaps, and understand medicine information through OCR, intelligent medicine matching, and AI-generated explanations.
 
-> **Important:** DoubleDose AI is an educational prototype, not a medical diagnosis, prescribing, or clinically validated decision-support tool. A result showing no shared ingredients does not establish that a medicine combination is safe.
+The project focuses on improving access to medicine information through a searchable catalogue of Bangladeshi medicines and a user-friendly medicine comparison workflow.
+
+> **Safety notice:** DoubleDose AI is an informational prototype, not a medical diagnostic system. Its results do not establish whether a medicine combination is safe. Always consult a qualified pharmacist or healthcare professional before combining medicines or changing treatment.
+
+---
+
+## Live Application
+
+- **Frontend:** https://doubledose-ai.vercel.app
+- **Backend API:** https://doubledose-ai-api.onrender.com
+- **Interactive API documentation:** https://doubledose-ai-api.onrender.com/docs
+
+---
+
+## Demo Video
+
+Watch the DoubleDose AI demonstration to see the main application workflow, including medicine search, OCR-based identification, candidate matching, ingredient overlap detection, and AI-generated explanations.
+
+**Demo video:** [Watch the DoubleDose AI Demo](YOUR_GOOGLE_DRIVE_DEMO_VIDEO_LINK)
+
+> Replace `YOUR_GOOGLE_DRIVE_DEMO_VIDEO_LINK` with your actual Google Drive sharing link before submission. Ensure the video permissions allow reviewers to view it.
+
+---
 
 ## Features
 
-- **Medicine search:** Search a catalogue of Bangladeshi medicine products.
-- **Medicine label OCR:** Upload medicine packaging images to extract text using OCR, with image preprocessing and fallback support.
-- **OCR text correction:** Review and edit extracted text before searching for matching medicines.
-- **Multiple medicine-matching approaches:** Generate candidate matches using RapidFuzz, TF-IDF, and semantic similarity with Sentence Transformers and FAISS.
-- **Candidate reranking:** Use available brand names, generic ingredients, strengths, dosage forms, and manufacturer information to improve candidate ordering.
-- **Match confirmation:** Review candidate products before adding them to the comparison.
-- **Ingredient comparison:** Identify shared recorded active ingredients among selected medicines.
-- **Incomplete-data warnings:** Highlight medicines with missing ingredient links and communicate limitations in the available catalogue data.
-- **AI-generated explanations:** Generate additional explanations of ingredient overlap through the Groq API.
-- **Drug-label references:** Retrieve available reference information through the openFDA API.
-- **Same-class warnings:** Present possible therapeutic-class duplication separately from exact ingredient overlap when applicable.
-- **Evaluation tools:** Evaluate medicine-matching approaches and ingredient-overlap behavior using project scripts and reports.
+### 1. Medicine Search
+
+- Search a catalogue of Bangladeshi medicines.
+- View medicine names, generic ingredients, strengths, dosage forms, and available manufacturer information.
+- Select multiple medicines for ingredient comparison.
+- Review candidate information before proceeding.
+
+### 2. Ingredient Overlap Detection
+
+- Compare the ingredients of selected medicines.
+- Identify shared ingredients when the available catalogue data supports the comparison.
+- Present potential overlap findings and relevant medicine information.
+- Report incomplete ingredient data where applicable.
+
+A lack of detected overlap does not establish that a combination is safe. Different medicines can interact even when they have no shared active ingredient.
+
+### 3. OCR-Based Medicine Identification
+
+- Upload medicine-label images in supported formats.
+- Extract text from medicine packaging using Tesseract OCR and an OCR.space fallback where configured.
+- Edit extracted text before searching for medicine candidates.
+- Retrieve potential medicine matches for user confirmation.
+
+Supported frontend upload formats include JPEG, PNG, and WebP, with a maximum upload size of 10 MB.
+
+OCR results may contain spelling errors, incomplete ingredient names, or incorrect strength values. Users should verify extracted information against the original packaging.
+
+### 4. Multiple Medicine-Matching Approaches
+
+DoubleDose AI includes three candidate-retrieval approaches:
+
+| Matcher        | Approach                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| RapidFuzz      | Fuzzy text matching for medicine names and OCR-extracted text                              |
+| TF-IDF         | Lexical similarity using text-vector representations                                       |
+| Semantic FAISS | Sentence Transformers embeddings, FAISS similarity search, and medicine-specific reranking |
+
+The semantic matcher uses the configurable Sentence Transformers model, defaulting to `sentence-transformers/all-MiniLM-L6-v2`.
+
+Semantic candidates can be reranked using evidence such as brand name, generic ingredients, manufacturer, strength, and dosage form.
+
+Matcher scores are ranking signals, not calibrated probabilities that a medicine has been identified correctly. Candidate confirmation remains important.
+
+### 5. AI-Generated Explanations
+
+- Uses the Groq API to generate explanations of medicine overlap findings.
+- Helps users understand relevant ingredient information in plain language.
+- Integrates structured application data with AI-generated explanatory text.
+- Supports more understandable presentation of potential overlap findings.
+
+AI-generated explanations may be incomplete or incorrect. They should not be treated as a clinical diagnosis, prescription, or substitute for professional advice.
+
+### 6. Medicine Information and Safety Context
+
+The application can use available medicine-catalogue information and configured external medicine-information sources, including openFDA integration, where supported.
+
+The availability and completeness of external information depend on the configured data sources and the medicine being searched.
+
+### 7. Evaluation and Experiment Tracking
+
+- Evaluates RapidFuzz, TF-IDF, and Semantic FAISS using a shared matcher evaluation script.
+- Calculates Top-1 accuracy, Top-3 accuracy, Mean Reciprocal Rank at 3 (MRR@3), no-candidate rate, and average query time.
+- Generates JSON and Markdown evaluation reports.
+- Supports MLflow experiment tracking when MLflow is installed and tracking succeeds.
+- Includes evaluation hooks for synthetic text, synthetic rendered images, and labelled real photographs.
+
+---
 
 ## Technology Stack
 
@@ -30,6 +107,7 @@ The project aims to help users identify potential duplicate active ingredients a
 - TypeScript
 - Tailwind CSS
 - Redux Toolkit
+- REST API integration
 
 ### Backend
 
@@ -37,176 +115,119 @@ The project aims to help users identify potential duplicate active ingredients a
 - FastAPI
 - SQLAlchemy
 - Pydantic
-- PostgreSQL hosted on Neon
+- PostgreSQL
+- Neon PostgreSQL hosting
 
-### AI and Data Processing
+### AI, NLP, and OCR
 
-- **OCR:** Tesseract OCR and an OCR.space fallback for text extraction.
-- **Image processing:** Pillow and OpenCV for image preprocessing.
-- **RapidFuzz:** Fuzzy string matching for candidate retrieval.
-- **scikit-learn TF-IDF:** Character n-gram similarity for medicine-name matching.
-- **Sentence Transformers:** Text embeddings for semantic medicine matching.
-- **FAISS:** Vector similarity search over the medicine catalogue.
-- **Groq API:** AI-generated explanations.
-- **openFDA API:** External drug-label reference information.
-- **Bangladeshi medicine dataset:** Initial medicine catalogue and ingredient-mapping source.
-- **MLflow:** Experiment tracking for supported matcher evaluation workflows.
+- Groq API for AI-generated explanations
+- Sentence Transformers for semantic embeddings
+- FAISS for vector similarity search
+- RapidFuzz for fuzzy string matching
+- TF-IDF for lexical similarity
+- Tesseract OCR for text extraction
+- OCR.space as a configured OCR fallback
+- openFDA integration for supported external medicine information
+- MLflow for experiment tracking
 
-## System Architecture
+### Deployment
 
-```text
-                         User
-                           |
-                           v
-                    Next.js Frontend
-                           |
-             +-------------+-------------+
-             |                           |
-             v                           v
-       Medicine Search             Image Upload
-             |                           |
-             |                           v
-             |                      FastAPI OCR
-             |                           |
-             |                  OCR / Image Processing
-             |                           |
-             |                           v
-             |                    Extracted Text
-             |                           |
-             |             +-------------+-------------+
-             |             |             |             |
-             |             v             v             v
-             |         RapidFuzz      TF-IDF     Semantic Matching
-             |                                      (Embeddings
-             |                                       + FAISS)
-             |             |             |             |
-             |             +-------------+-------------+
-             |                           |
-             |                           v
-             |                    Ranked Candidates
-             |                           |
-             +---------------------------+
-                                         |
-                                         v
-                                 User Confirmation
-                                         |
-                                         v
-                                  Medicine Selection
-                                         |
-                                         v
-                                   FastAPI Backend
-                                         |
-                                         v
-                                  PostgreSQL / Neon
-                                         |
-                                         v
-                                Ingredient Comparison
-                                         |
-                     +-------------------+-------------------+
-                     |                   |                   |
-                     v                   v                   v
-                Ingredient          Incomplete-Data     Same-Class
-                  Overlap              Warnings          Warnings
-                     |                   |                   |
-                     +-------------------+-------------------+
-                                         |
-                                         v
-                               Groq / Reference Data
-                                         |
-                                         v
-                                Results and Explanation
+- Vercel for the frontend
+- Render for the backend
+- Neon for the PostgreSQL database
+
+---
+
+## Latest Medicine-Matcher Benchmark
+
+The latest recorded evaluation was run on October 28, 2026, using:
+
+```bash
+python -m scripts.evaluate_medicine_matchers
 ```
 
-The frontend, backend API, and database are separate components. OCR and medicine matching generate candidate products; the user must review and confirm the intended medicine. Ingredient comparison relies on the ingredient records available in the database.
+The evaluation used five manually written, clean-text cases, with a top-three candidate cutoff.
 
-The semantic matcher complements string-based approaches by comparing text embeddings. It does not independently verify a medicine's identity, ingredients, or clinical equivalence.
+| Metric            | RapidFuzz | TF-IDF | Semantic FAISS |
+| ----------------- | --------: | -----: | -------------: |
+| Evaluation cases  |         5 |      5 |              5 |
+| Top-1 accuracy    |       80% |    80% |           100% |
+| Top-3 accuracy    |      100% |   100% |           100% |
+| MRR@3             |      0.90 |   0.90 |           1.00 |
+| No-candidate rate |        0% |     0% |             0% |
+| Mean query time   |    5.65 s | 5.62 s |         0.38 s |
 
-AI-generated explanations provide additional context and should not be treated as verified medical advice.
+### Understanding the metrics
 
-## How It Works
+- **Top-1 accuracy:** The proportion of cases where the expected medicine brand appears first.
+- **Top-3 accuracy:** The proportion of cases where the expected brand appears among the first three candidates.
+- **MRR@3:** The mean reciprocal rank of the expected brand within the first three candidates.
+- **No-candidate rate:** The proportion of queries for which no candidates are returned.
+- **Mean query time:** The average measured query duration during the recorded run.
 
-1. Search for a medicine or upload an image of its packaging.
-2. Extract text from the image using the available OCR service.
-3. Review and, if necessary, correct the extracted text.
-4. Generate medicine candidates using the available matching approaches.
-5. Review and confirm the correct product.
-6. Select medicines for comparison, subject to the application's selection limit.
-7. Review shared recorded ingredients, possible same-class warnings, and incomplete-data notices.
-8. Read the AI-generated explanation and any available reference information.
-9. Verify the results with a qualified healthcare professional before making medication decisions.
+The reported Top-1 accuracy confidence intervals were:
 
-## Medicine Matching
+| Matcher        | Wilson 95% confidence interval |
+| -------------- | ------------------------------ |
+| RapidFuzz      | 37.6%–96.4%                    |
+| TF-IDF         | 37.6%–96.4%                    |
+| Semantic FAISS | 56.6%–100%                     |
 
-DoubleDose AI supports three complementary matching approaches.
+### Interpretation
 
-| Approach          | Method                                        | Purpose                                                          |
-| ----------------- | --------------------------------------------- | ---------------------------------------------------------------- |
-| RapidFuzz         | Fuzzy string similarity                       | Finds candidates despite spelling differences and imperfect text |
-| TF-IDF            | Character n-gram vectorization and similarity | Compares medicine-name patterns                                  |
-| Semantic matching | Sentence Transformer embeddings and FAISS     | Retrieves candidates based on semantic similarity                |
+Semantic FAISS ranked the expected brand first in all five cases in this run. RapidFuzz and TF-IDF each ranked the expected brand first in four of five cases. All three approaches returned the expected brand within their top three candidates for all five cases.
 
-The system can rerank candidates using available product information, including brand name, generic ingredients, strength, dosage form, and manufacturer.
+These are **preliminary results, not a comprehensive accuracy evaluation**. Five clean-text examples are insufficient to establish general performance on unseen medicines, real packaging photographs, or noisy OCR output.
 
-The approaches have different strengths. Fuzzy matching can perform well on recognizable product names, while semantic matching can retrieve related descriptions with less direct lexical overlap. Neither approach guarantees that the highest-ranked result is the correct product.
+Query times are environment-dependent and may vary with caching, model initialization, hardware, and system load. They should not be interpreted as guaranteed production latency.
 
-**Candidate scores are ranking signals, not calibrated probabilities of correctness.** OCR errors, missing catalogue fields, combination products, and similar brand names can affect the results. Users must confirm candidate identities before comparison.
+### Reproducing the evaluation
 
-## Evaluation
+From the backend directory, activate the Python virtual environment and run:
 
-The repository includes scripts and reports for evaluating medicine matching and ingredient-overlap behavior.
+```powershell
+python -m scripts.evaluate_medicine_matchers
+```
 
-### Medicine-Matching Evaluation
+The evaluator generates:
 
-The matcher evaluation workflow compares approaches using manually prepared medicine-identification queries. One recorded evaluation run reported the following results:
+- `backend/evaluation/results/matcher_report.json`
+- `backend/evaluation/results/matcher_report.md`
 
-| Metric                     | RapidFuzz | TF-IDF |
-| -------------------------- | --------: | -----: |
-| Top-1 accuracy             |      100% |    40% |
-| Top-3 accuracy             |      100% |    60% |
-| Mean reciprocal rank (MRR) |      1.00 |   0.50 |
-| Evaluation cases           |         5 |      5 |
+The evaluator also supports additional synthetic-text, synthetic-image, and labelled real-photo datasets. Results for those datasets should be generated separately before claiming that those evaluations have been completed.
 
-These figures describe that particular five-case evaluation run; they should not be interpreted as stable estimates of performance across the full medicine catalogue.
+---
 
-The repository's evaluation scripts and generated outputs are the source of truth for reproducing or updating the results. Different query sets, catalogue states, or evaluation runs may produce different metrics.
+## Application Screenshots
 
-**Evaluation limitations:**
+The following screenshots are stored in `docs/images/` in the repository.
 
-- The benchmark is small and uses manually prepared queries.
-- It does not establish accuracy on real-world medicine packaging images or noisy OCR output.
-- Results may vary with catalogue coverage, preprocessing, and the matching configuration.
-- A high score does not establish pharmaceutical equivalence or clinical correctness.
-- The recorded results should be refreshed whenever the evaluation dataset or matcher implementation changes.
+### Medicine Search
 
-### Ingredient-Overlap Assessment
+![DoubleDose AI medicine search](docs/images/medicine-search.png)
 
-The project includes an ingredient-overlap assessment covering 10 evaluation cases in the documented assessment workflow.
+### OCR-Based Medicine Identification
 
-Consult `backend/evaluation/results/` for the available generated reports and recorded metrics, including true positives, false positives, false negatives, precision, recall, and F1 score where reported.
+![DoubleDose AI OCR candidate matching](docs/images/ocr-candidates.png)
 
-These evaluations assess implementation behavior on the tested cases. They do not establish clinical validity, complete ingredient coverage, or the ability to detect every possible medication interaction.
+### Ingredient Overlap Results
 
-## Data Coverage and Limitations
+![DoubleDose AI ingredient overlap checker](docs/images/ingredient-overlap.png)
 
-The application uses a medicine catalogue assembled from a Bangladeshi medicine product dataset and associated ingredient mappings.
+### AI-Generated Explanation
 
-Catalogue size and ingredient-link coverage can change as data is imported, corrected, or updated. Consult the current database coverage report or generated evaluation artifacts for the latest verified figures rather than assuming that the catalogue is complete.
+![DoubleDose AI explanation](docs/images/ai-explanation.png)
 
-Important distinctions:
-
-- A medicine having at least one ingredient link does not mean every active ingredient has been recorded correctly.
-- Combination products may have incomplete ingredient mappings.
-- Ingredient amounts and strength-level details may be missing.
-- Similar brand names do not necessarily represent the same medicine.
-- Missing ingredient data can cause the application to miss a potential overlap.
-- The system's overlap analysis is not a comprehensive drug-interaction checker.
-
-The application can warn when a medicine has no recorded ingredient links. However, a medicine with at least one link may still have incomplete information. Therefore, an overlap result can be incomplete even when the system finds a shared ingredient.
+---
 
 ## Project Structure
 
+The repository is organized into frontend, backend, documentation, and evaluation components.
+
 ```text
 doubledose-ai/
+├── LICENSE
+├── README.md
 ├── backend/
 │   ├── app/
 │   │   ├── api/
@@ -218,139 +239,225 @@ doubledose-ai/
 │   ├── evaluation/
 │   │   └── results/
 │   ├── scripts/
-│   ├── main.py
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── requirements-ml.txt
 ├── frontend/
 │   ├── app/
 │   ├── components/
-│   ├── hooks/
 │   ├── lib/
 │   └── types/
-├── docs/
-│   ├── ai-methodology.md
-│   ├── user-guide.md
-│   ├── production-smoke-test.md
-│   └── images/
-├── LICENSE
-└── README.md
+└── docs/
+    ├── images/
+    ├── ai-methodology.md
+    └── user-guide.md
 ```
 
-This is a high-level structure; individual files and folders may differ as the project evolves.
+This is a simplified overview; individual files may vary as the project evolves.
 
-## Live Deployment
+---
 
-- **Frontend:** [https://doubledose-ai.vercel.app](https://doubledose-ai.vercel.app)
-- **Backend API:** [https://doubledose-ai-api.onrender.com](https://doubledose-ai-api.onrender.com)
-- **API documentation:** [https://doubledose-ai-api.onrender.com/docs](https://doubledose-ai-api.onrender.com/docs)
-
-The backend exposes API endpoints for the implemented medicine search, ingredient comparison, AI explanations, OCR extraction, and medicine matching workflows. Consult the deployed OpenAPI documentation for the currently available endpoints and request schemas.
-
-Deployment availability and third-party service limits may affect the application.
-
-## Running Locally
-
-The frontend and backend run as separate applications.
+## Local Setup
 
 ### Prerequisites
 
-- Python and pip
-- Node.js and npm
-- A Neon PostgreSQL database or compatible PostgreSQL instance
+- Python 3.11 or another version compatible with the project's dependencies
+- Node.js and npm compatible with the frontend configuration
+- Git
+- PostgreSQL or a Neon PostgreSQL database
 - A Groq API key for AI-generated explanations
-- An OCR.space API key if using the hosted OCR fallback locally
-- Tesseract OCR installed if using local Tesseract OCR
+- An OCR.space API key if using that configured OCR fallback
 
-### 1. Backend Setup
+Tesseract OCR is also required for the local Tesseract workflow. Install it separately and ensure its executable is accessible to the backend configuration.
 
-Open PowerShell in the `backend` directory:
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/MasrulSakib/doubledose-ai.git
+cd doubledose-ai
+```
+
+Replace the placeholder with the actual GitHub repository URL.
+
+### 2. Configure the backend
+
+```bash
+cd backend
+python -m venv .venv
+```
+
+Activate the virtual environment.
+
+**Windows PowerShell:**
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
+
+**macOS/Linux:**
+
+```bash
+source .venv/bin/activate
+```
+
+Install the dependencies:
+
+```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Configure the environment variables expected by the backend. These may include:
+If the application requires additional machine-learning dependencies, install them too:
 
-- Database connection settings
-- Groq API key and model configuration
-- OCR.space API key
-- Semantic-matching configuration, if enabled
+```bash
+pip install -r requirements-ml.txt
+```
 
-Use the actual variable names defined in the application's settings and service files. Do not commit secrets or production credentials to source control.
+Use the dependency files and Python version supported by the current project configuration.
 
-If the application uses Alembic migrations, apply the repository's migrations to the configured database before starting the API.
+### 3. Configure environment variables
 
-Start the FastAPI server:
+Create a local `.env` file using the variable names expected by the backend configuration.
 
-```powershell
+Example:
+
+```dotenv
+DATABASE_URL=your_neon_postgresql_connection_string
+GROQ_API_KEY=your_groq_api_key
+OCR_SPACE_API_KEY=your_ocr_space_api_key
+SENTENCE_TRANSFORMER_MODEL=sentence-transformers/all-MiniLM-L6-v2
+```
+
+These are example settings. Verify the exact variable names against the backend configuration; optional services may not require every variable.
+
+Apply database migrations if required by the current database state:
+
+```bash
+alembic upgrade head
+```
+
+Run the backend from the directory containing `main.py`:
+
+```bash
 uvicorn main:app --reload
 ```
 
-Local API:
+The local API will normally be available at:
 
-`http://127.0.0.1:8000`
+- API: http://127.0.0.1:8000
+- Swagger documentation: http://127.0.0.1:8000/docs
 
-Interactive API documentation:
+### 4. Configure the frontend
 
-`http://127.0.0.1:8000/docs`
+Open a second terminal:
 
-### 2. Frontend Setup
-
-Open a separate terminal in the `frontend` directory:
-
-```powershell
+```bash
+cd frontend
 npm install
+```
+
+Configure the frontend API base URL using the environment variable expected by the API client. For example, if the client uses `NEXT_PUBLIC_API_URL`, create `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+Check the existing API client and environment configuration to confirm the exact variable name and whether an API prefix is required.
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-Configure the frontend's backend API URL using the environment variable expected by the application. For the deployed frontend, this should point to the deployed backend API.
+Open http://localhost:3000 in your browser.
 
-Open:
+### 5. Run a production build
 
-`http://localhost:3000`
+From the frontend directory:
 
-Use the package manager and lockfile already present in the repository if they differ from these examples.
+```bash
+npm run build
+```
 
-### Optional Local OCR and Semantic Matching
+Resolve any build errors before deploying new frontend changes.
 
-Local Tesseract OCR requires the Tesseract executable to be installed and discoverable by the application, or explicitly configured in its settings.
+---
 
-Semantic matching requires the relevant Python dependencies and a compatible Sentence Transformer model. The model may need to be downloaded the first time it is loaded. If semantic matching is disabled or unavailable, the application may fall back to another supported matching approach.
+## Deployment
 
-## Responsible Use and Safety
+### Frontend — Vercel
 
-DoubleDose AI does not replace a pharmacist, physician, or other qualified healthcare professional.
+The frontend is deployed on Vercel:
 
-- OCR may misread medicine names, ingredients, and strengths.
-- A matching result is a candidate, not proof of product equivalence.
-- Incomplete ingredient mappings can cause missed overlaps.
-- Shared ingredients are only one consideration in medication safety.
-- The absence of shared recorded ingredients does not establish that a combination is safe.
-- Therapeutic-class warnings are informational and may not capture every relevant medicine relationship.
-- AI-generated explanations may contain inaccurate or incomplete information.
-- External openFDA information may describe US-market products and may not apply directly to medicines sold in Bangladesh.
-- The project has not been clinically validated as a medical device.
+https://doubledose-ai.vercel.app
 
-Always verify medicine information against the actual packaging and consult a qualified healthcare professional before combining medicines, changing medication, or making treatment decisions.
+Configure the frontend API base URL using the variable expected by the application. Ensure it points to the deployed backend and uses the correct API prefix.
 
-## Additional Documentation
+### Backend — Render
 
-- [AI Methodology](docs/ai-methodology.md) — describes the OCR pipeline, medicine-matching approaches, ingredient comparison, AI integration, evaluation, and limitations.
-- [User Guide](docs/user-guide.md) — explains how to use the application.
-- [Production Smoke Test Report](docs/production-smoke-test.md) — documents production functionality checks.
+The backend is deployed on Render:
 
-### Application Screenshots
+https://doubledose-ai-api.onrender.com
 
-Store screenshots captured from the actual application in `docs/images/`. Add or update these files before linking to them in the README.
+API documentation:
 
-Suggested screenshots:
+https://doubledose-ai-api.onrender.com/docs
 
-- `docs/images/medicine-search.png`
-- `docs/images/ocr-candidates.png`
-- `docs/images/ingredient-overlap.png`
-- `docs/images/ai-explanation.png`
+Configure database credentials, AI API keys, OCR fallback credentials, and other required settings through the hosting provider's environment settings rather than committing secrets to the repository.
 
-## License
+### Database — Neon
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+The application uses Neon PostgreSQL for hosted database storage. Keep the database connection string private and ensure the deployed backend uses the intended database.
+
+---
+
+## Documentation
+
+- [AI methodology](docs/ai-methodology.md) — matching approaches, OCR, AI integration, evaluation metrics, and limitations.
+- [User guide](docs/user-guide.md) — instructions for searching medicines, uploading labels, reviewing candidates, and interpreting results.
+- [Matcher evaluation report](backend/evaluation/results/matcher_report.md) — generated benchmark results.
+- [Matcher evaluation data](backend/evaluation/results/matcher_report.json) — machine-readable benchmark results.
+- [Project license](LICENSE) — license terms for the repository.
+
+---
+
+## Limitations and Responsible Use
+
+DoubleDose AI is a prototype intended for medicine-information exploration and demonstration.
+
+- Medicine-catalogue entries may contain incomplete or inconsistent ingredient, strength, dosage-form, or manufacturer information.
+- OCR can misread brand names, ingredients, and strengths.
+- Candidate-ranking results can be incorrect even when a high score is returned.
+- Semantic similarity does not prove that two medicines are equivalent.
+- Shared ingredients can be missed when catalogue data is incomplete.
+- No shared ingredient does not mean that two medicines are safe to take together.
+- AI-generated explanations can omit important context or produce incorrect statements.
+- The five-case matcher benchmark is too small to establish general-purpose accuracy.
+- This benchmark does not establish clinical safety, therapeutic effectiveness, or trained YOLO detector performance.
+
+Always verify medicine details with the original packaging and consult a qualified pharmacist or healthcare professional for decisions involving medication.
+
+---
+
+## Future Improvements
+
+Potential next steps include:
+
+- Expanding the evaluation dataset with verified medicine labels and realistic OCR errors.
+- Testing all three matchers on the same larger, independently labelled dataset.
+- Measuring matching performance by dosage form, strength, brand-name variation, and OCR quality.
+- Evaluating OCR on real packaging photographs.
+- Improving ingredient-data completeness and source tracking.
+- Improving confidence calibration and candidate-review workflows.
+- Adding more comprehensive tests for the API, frontend, OCR, and matching behavior.
+- Improving monitoring, reproducibility, and experiment tracking.
+
+These are potential improvements and should not be interpreted as completed features unless they have been implemented and evaluated.
+
+---
+
+## Author
+
+**Masrul Sakib**
+
+DoubleDose AI was developed as a capstone project exploring the practical use of AI, natural-language processing, OCR, and web technologies to improve access to medicine information.

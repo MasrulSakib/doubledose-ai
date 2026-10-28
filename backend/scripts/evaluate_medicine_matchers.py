@@ -28,12 +28,12 @@ MATCHERS = {
 }
 
 # Planned matcher that is not implemented in this repository yet.
-BLOCKED_MATCHERS = {
-    "sentence_transformers_faiss": (
-        "not implemented in the repo; the Hugging Face model host was also "
-        "unreachable from the assessment sandbox"
-    ),
-}
+# BLOCKED_MATCHERS = {
+#     "sentence_transformers_faiss": (
+#         "not implemented in the repo; the Hugging Face model host was also "
+#         "unreachable from the assessment sandbox"
+#     ),
+# }
 
 # Small initial set typed by hand (clean text, not real OCR output).
 LEGACY_CASES = [
@@ -339,10 +339,15 @@ def to_markdown(report: dict, meta: dict) -> str:
         lines.append("")
     if meta.get("database"):
         lines += ["## Database facts", "", json.dumps(meta["database"], indent=2), ""]
-    lines += ["## Not measured", ""]
-    lines += [f"- {name}: {reason}" for name, reason in BLOCKED_MATCHERS.items()]
-    lines += ["- Real photos: " + ("run" if "real_photo" in report else "none supplied (pass --images-dir)."),
-              "- YOLO detector / mAP: no trained weights or detector-labelled images were available; the full-image OCR fallback is what ran."]
+        lines += ["## Limitations", ""]
+        lines += [
+            "- The legacy benchmark contains only five hand-typed, clean-text cases "
+            "and is too small to generalize.",
+            "- Real photos: "
+            + ("run" if "real_photo" in report else "none supplied (pass --images-dir)."),
+            "- YOLO detector / mAP: no trained weights or detector-labelled images "
+            "were available; the full-image OCR fallback was used.",
+        ]
     return "\n".join(lines) + "\n"
 
 
