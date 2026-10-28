@@ -22,11 +22,7 @@ The project focuses on improving access to medicine information through a search
 
 Watch the DoubleDose AI demonstration to see the main application workflow, including medicine search, OCR-based identification, candidate matching, ingredient overlap detection, and AI-generated explanations.
 
-**Demo video:** [Watch the DoubleDose AI Demo](YOUR_GOOGLE_DRIVE_DEMO_VIDEO_LINK)
-
-> Replace `YOUR_GOOGLE_DRIVE_DEMO_VIDEO_LINK` with your actual Google Drive sharing link before submission. Ensure the video permissions allow reviewers to view it.
-
----
+**Demo video:** [Watch the DoubleDose AI Demo](https://drive.google.com/file/d/1xePAFNdk9BbNH2wDPoXH8oY10_6hTCP1/view?usp=sharing)
 
 ## Features
 
