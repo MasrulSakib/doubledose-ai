@@ -482,23 +482,72 @@ def _rerank_score(
     ):
         score += 5.0
 
+
     # Explicit attribute compatibility.
-    if query_strengths:
-        score += 15.0 if strength_match else -25.0
+    if query_strengths and query_forms:
+        strength_match = bool(
+            query_strengths.intersection(candidate_strengths)
+        )
+        form_match = bool(
+            query_forms.intersection(candidate_forms)
+        )
 
-    if query_forms:
-        score += 15.0 if form_match else -25.0
+        if strength_match and form_match:
+            compatibility_tier = 30.0
+        elif strength_match or form_match:
+            compatibility_tier = 0.0
+        else:
+            compatibility_tier = -30.0
 
-    if strength_match and form_match:
-        compatibility_tier = 30.0
-    elif strength_match or form_match:
-        compatibility_tier = 0.0
-    else:
-        compatibility_tier = -30.0
+        score += compatibility_tier
 
-    score += compatibility_tier
+    elif query_strengths:
+        score += (
+            15.0
+            if query_strengths.intersection(candidate_strengths)
+            else -25.0
+        )
+
+    elif query_forms:
+        score += (
+            15.0
+            if query_forms.intersection(candidate_forms)
+            else -25.0
+        )
 
     return round(max(0.0, min(150.0, score)), 1)
+
+
+def _compatibility_rank(
+    query: str,
+    record: dict[str, Any],
+) -> tuple[int, int]:
+    """Prioritize dosage form, then strength compatibility."""
+    query_strengths = _extract_strengths(query)
+    query_forms = _extract_dosage_forms(query)
+
+    candidate_description = _normalize_text(
+        " ".join(
+            str(record.get(field) or "")
+            for field in ("dosage_form", "strength", "document")
+        )
+    )
+
+    candidate_strengths = _extract_strengths(candidate_description)
+    candidate_forms = _extract_dosage_forms(candidate_description)
+
+    form_match = (
+        not query_forms
+        or bool(query_forms.intersection(candidate_forms))
+    )
+    strength_match = (
+        not query_strengths
+        or bool(query_strengths.intersection(candidate_strengths))
+    )
+
+    # Sort form first, then strength.
+    return int(form_match), int(strength_match)
+
 
 def match_medicines_semantic(
     db: Session,
@@ -561,7 +610,9 @@ def match_medicines_semantic(
             "brand_name": record["brand_name"],
             "generic_name": record["generic_name"],
             "strength": record["strength"],
+            "dosage_form": record["dosage_form"],
             "match_score": semantic_score,
+            "compatibility_rank": _compatibility_rank(query, record),
             "ranking_score": ranking_score,
             "needs_confirmation": True,
             "matcher": "semantic_faiss",
@@ -569,6 +620,7 @@ def match_medicines_semantic(
 
     candidates.sort(
         key=lambda item: (
+            item["compatibility_rank"],
             item["ranking_score"],
             item["match_score"],
         ),
