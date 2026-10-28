@@ -4,7 +4,7 @@ from app.core.config import settings
 
 import logging
 logger = logging.getLogger(__name__)
-
+import shutil
 import pytesseract
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -63,6 +63,10 @@ def _rank_extracted_text(text: str) -> tuple[int, int, int, int]:
         useful_characters,
     )
 
+logger.warning(
+    "OCR diagnostic: tesseract_path=%s",
+    shutil.which("tesseract"),
+)
 
 @router.post("/extract")
 async def extract_medicine_text(file: UploadFile = File(...)):
