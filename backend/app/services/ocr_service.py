@@ -1,12 +1,22 @@
-
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
+from io import BytesIO
+from typing import Any
 
+import httpx
 import pytesseract
 from PIL import Image
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------
+# Tesseract configuration
+# ---------------------------------------------------------
 
 tesseract_path = os.getenv("TESSERACT_CMD", "").strip()
 
@@ -21,6 +31,7 @@ else:
         pytesseract.pytesseract.tesseract_cmd = detected_path
     elif os.name == "nt":
         windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
         if os.path.isfile(windows_path):
             pytesseract.pytesseract.tesseract_cmd = windows_path
 
@@ -41,12 +52,102 @@ MEDICINE_TERMS = (
 )
 
 STRENGTH_PATTERN = re.compile(
-    r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml)\b",
+    r"\b\d+(?:\.\d+)?\s*"
+    r"(?:mg|mcg|g|ml|iu|units?)\b",
     re.IGNORECASE,
 )
 
+OCR_SPACE_URL = "https://api.ocr.space/parse/image"
 
-def _preprocess_image(image: Image.Image) -> list:
+
+# ---------------------------------------------------------
+# OCR.space fallback
+# ---------------------------------------------------------
+
+def _extract_text_with_ocr_space(image: Image.Image) -> str:
+    """Extract medicine-label text using the hosted OCR.space API."""
+    api_key = os.getenv("OCR_SPACE_API_KEY", "").strip()
+
+    if not api_key:
+        raise RuntimeError(
+            "OCR_SPACE_API_KEY is not configured on the server."
+        )
+
+    buffer = BytesIO()
+    image.convert("RGB").save(buffer, format="PNG")
+    image_bytes = buffer.getvalue()
+
+    try:
+        response = httpx.post(
+            OCR_SPACE_URL,
+            headers={"apikey": api_key},
+            data={
+                "language": "eng",
+                "isOverlayRequired": "false",
+                "scale": "true",
+                "OCREngine": "2",
+            },
+            files={
+                "file": (
+                    "medicine.png",
+                    image_bytes,
+                    "image/png",
+                )
+            },
+            timeout=35.0,
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    except httpx.TimeoutException:
+        logger.warning("OCR.space request timed out.")
+        raise RuntimeError(
+            "Hosted OCR timed out. Please try again."
+        ) from None
+
+    except httpx.HTTPError:
+        logger.exception("OCR.space HTTP request failed.")
+        raise RuntimeError(
+            "Hosted OCR is temporarily unavailable."
+        ) from None
+
+    except ValueError:
+        logger.exception("OCR.space returned invalid JSON.")
+        raise RuntimeError(
+            "Hosted OCR returned an invalid response."
+        ) from None
+
+    if result.get("IsErroredOnProcessing"):
+        logger.error(
+            "OCR.space processing error: %s",
+            result.get("ErrorMessage"),
+        )
+        raise RuntimeError(
+            "Hosted OCR could not process this image."
+        )
+
+    parsed_results = result.get("ParsedResults") or []
+
+    extracted_text = "\n".join(
+        item.get("ParsedText", "").strip()
+        for item in parsed_results
+        if item.get("ParsedText", "").strip()
+    )
+
+    if not extracted_text and result.get("ErrorMessage"):
+        logger.warning(
+            "OCR.space returned no text: %s",
+            result.get("ErrorMessage"),
+        )
+
+    return _normalize_text(extracted_text)
+
+
+# ---------------------------------------------------------
+# Image preprocessing
+# ---------------------------------------------------------
+
+def _preprocess_image(image: Image.Image) -> list[Any]:
     """Generate image variants for printed medicine text."""
     import cv2
     import numpy as np
@@ -90,14 +191,19 @@ def _preprocess_image(image: Image.Image) -> list:
         11,
     )
 
+    # Retain the existing variants used by the local OCR pipeline.
     return [gray, contrast]
 
 
+# ---------------------------------------------------------
+# Local Tesseract extraction
+# ---------------------------------------------------------
+
 def _extract_candidate(
-    image,
+    image: Any,
     config: str,
 ) -> tuple[str, float]:
-    """Extract text and calculate average confidence for recognized words."""
+    """Extract text and calculate average OCR word confidence."""
     data = pytesseract.image_to_data(
         image,
         config=config,
@@ -145,6 +251,10 @@ def _extract_candidate(
     return text, average_confidence
 
 
+# ---------------------------------------------------------
+# Text normalization and ranking
+# ---------------------------------------------------------
+
 def _normalize_text(text: str) -> str:
     """Remove repeated lines and normalize whitespace."""
     seen: set[str] = set()
@@ -158,8 +268,7 @@ def _normalize_text(text: str) -> str:
 
         normalized = re.sub(r"[^a-z0-9]", "", line.lower())
 
-        # Ignore exact repeated OCR lines while preserving their first
-        # occurrence and the original readable text.
+        # Preserve the first occurrence of repeated OCR lines.
         if normalized and normalized in seen:
             continue
 
@@ -172,7 +281,7 @@ def _normalize_text(text: str) -> str:
 
 
 def _score_text(text: str, confidence: float) -> float:
-    """Rank candidates using OCR confidence and medicine-related clues."""
+    """Rank OCR candidates using confidence and medicine-related clues."""
     normalized = re.sub(r"\s+", " ", text).strip()
 
     if not normalized:
@@ -181,7 +290,6 @@ def _score_text(text: str, confidence: float) -> float:
     lowered = normalized.lower()
     score = confidence * 0.7
 
-    # Favor readable words, not simply long strings of OCR noise.
     words = re.findall(r"[a-zA-Z]{3,}", normalized)
     score += min(len(words), 30) * 0.4
 
@@ -192,34 +300,79 @@ def _score_text(text: str, confidence: float) -> float:
     if STRENGTH_PATTERN.search(lowered):
         score += 15
 
-    alphanumeric_count = sum(char.isalnum() for char in normalized)
+    alphanumeric_count = sum(
+        char.isalnum() for char in normalized
+    )
     symbol_count = sum(
         not char.isalnum() and not char.isspace()
         for char in normalized
     )
 
     if alphanumeric_count:
-        score -= min(symbol_count / alphanumeric_count, 1.0) * 10
+        score -= min(
+            symbol_count / alphanumeric_count,
+            1.0,
+        ) * 10
 
     return score
 
 
+# ---------------------------------------------------------
+# Main OCR entry point
+# ---------------------------------------------------------
+
 def extract_text_from_image(image: Image.Image) -> str:
-    """Return the highest-ranked OCR result from multiple image variants."""
+    """
+    Extract text using local Tesseract when available.
+    Otherwise, fall back to OCR.space.
+    """
+    configured_path = (
+        pytesseract.pytesseract.tesseract_cmd
+    )
+
+    tesseract_available = (
+        os.path.isfile(configured_path)
+        or shutil.which(configured_path) is not None
+        or shutil.which("tesseract") is not None
+    )
+
+    # Render currently has no Tesseract executable, so use
+    # the hosted OCR service without attempting local OCR.
+    if not tesseract_available:
+        logger.info(
+            "Tesseract unavailable; using OCR.space fallback."
+        )
+        return _extract_text_with_ocr_space(image)
+
     best_text = ""
     best_score = 0.0
 
-    for variant in _preprocess_image(image):
-        for config in OCR_CONFIGS:
-            text, confidence = _extract_candidate(variant, config)
+    try:
+        for variant in _preprocess_image(image):
+            for config in OCR_CONFIGS:
+                text, confidence = _extract_candidate(
+                    variant,
+                    config,
+                )
 
-            if not text.strip():
-                continue
+                if not text.strip():
+                    continue
 
-            candidate_score = _score_text(text, confidence)
+                candidate_score = _score_text(
+                    text,
+                    confidence,
+                )
 
-            if candidate_score > best_score:
-                best_score = candidate_score
-                best_text = text
+                if candidate_score > best_score:
+                    best_score = candidate_score
+                    best_text = text
+
+    except pytesseract.TesseractNotFoundError:
+        # Recover if the executable disappears or its configured
+        # path becomes invalid after the initial availability check.
+        logger.warning(
+            "Tesseract executable unavailable; using OCR.space."
+        )
+        return _extract_text_with_ocr_space(image)
 
     return _normalize_text(best_text)
