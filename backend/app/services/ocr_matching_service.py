@@ -196,24 +196,30 @@ def _strength_match_score(
     return 15.0 * len(matching_strengths) / len(ocr_strengths)
 
 
+
 def _dosage_form_score(
     normalized_ocr: str,
     source_display_name: str | None,
+    dosage_form: str | None = None,
 ) -> float:
-    """Reward compatible dosage forms and penalize conflicting forms."""
-    if not source_display_name:
-        return 0.0
-
+    """Reward matching dosage forms and strongly penalize conflicts."""
     ocr_forms = _extract_dosage_forms(normalized_ocr)
-    medicine_forms = _extract_dosage_forms(source_display_name)
 
-    if not ocr_forms or not medicine_forms:
+    candidate_text = " ".join(
+        value for value in (source_display_name, dosage_form) if value
+    )
+    medicine_forms = _extract_dosage_forms(candidate_text)
+
+    if not ocr_forms:
         return 0.0
 
-    if ocr_forms & medicine_forms:
-        return 5.0
+    if not medicine_forms:
+        return -10.0
 
-    return -10.0
+    if ocr_forms.intersection(medicine_forms):
+        return 10.0
+
+    return -25.0
 
 
 def _brand_match_score(
@@ -294,8 +300,9 @@ def _score_medicine(
     )
 
     score += _dosage_form_score(
-        normalized_ocr,
-        source_display_name,
+    normalized_ocr,
+    source_display_name,
+    medicine.dosage_form,
     )
 
     # A longer, more specific brand should outrank its shorter base brand
@@ -400,6 +407,7 @@ def match_medicines_from_ocr(
         {
             "medicine_id": medicine.id,
             "brand_name": medicine.brand_name,
+            "dosage_form": medicine.dosage_form,
             "generic_name": medicine.generic_name,
             "strength": medicine.source_display_name,
             "match_score": score,
