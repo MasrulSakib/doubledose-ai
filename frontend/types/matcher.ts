@@ -9,4 +9,5 @@ export interface MatcherCompareResponse {
   extracted_text: string;
   rapidfuzz: OCRMedicineMatch[];
   tfidf: OCRMedicineMatch[];
+  semantic_faiss: OCRMedicineMatch[];
 }

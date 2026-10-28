@@ -2,97 +2,91 @@
 
 ## 1. Overview
 
-DoubleDose AI is an AI-assisted medicine information application focused on medicine products in Bangladesh. Its workflow combines optical character recognition (OCR), text-based medicine matching, ingredient-record comparison, and AI-generated explanations.
+DoubleDose AI combines optical character recognition (OCR), medicine-candidate retrieval, ingredient comparison, and large language model (LLM) explanations to help users inspect medicine information.
 
-The system helps users identify possible shared active ingredients among selected medicines. It is an informational tool and has not been clinically validated as a medical device.
+The workflow separates candidate identification from ingredient comparison and AI-generated explanations. This distinction is important because a similarity score does not prove medicine identity, and an AI-generated explanation does not independently verify clinical facts.
 
-## 2. OCR and Image Processing
+## 2. OCR Pipeline
 
-The application accepts medicine-package images and extracts text using Tesseract OCR. Image processing and fallback extraction are used to improve the availability of text from uploaded images.
+The OCR workflow extracts text from uploaded medicine-package images.
 
-OCR output can contain spelling errors, incomplete words, or incorrect readings of brand names and strengths. Therefore, extracted text is treated as an input for candidate retrieval rather than a verified medicine identity.
+### Processing steps
 
-The application returns candidate medicines for the user to review and confirm.
+1. The user uploads an image of a medicine strip or box.
+2. The backend processes the image and attempts text extraction.
+3. The OCR workflow uses Tesseract OCR where available and supports OCR.space as a fallback.
+4. Extracted text is returned to the frontend for review.
+5. The user can correct recognition errors before requesting medicine candidates.
 
-## 3. Medicine Matching
+OCR output may contain misspelled brand names, merged words, incorrect strengths, or unrelated packaging text. The application therefore treats extracted text as an input for candidate retrieval rather than as verified medicine information.
 
-The evaluated implementation compares two text-matching approaches.
+A separately trained YOLO detector is not claimed as part of the current implementation.
 
-### RapidFuzz
+## 3. Medicine-Matching Methods
 
-RapidFuzz performs fuzzy string matching to retrieve medicine candidates when the OCR text or search text is not an exact match for the database name. This helps accommodate spelling differences and imperfect text extraction.
+The system supports three approaches to retrieving medicine candidates.
 
-### TF-IDF
+### 3.1 RapidFuzz
 
-The TF-IDF approach uses character n-gram text features and similarity scoring to retrieve and rank medicine candidates. Character-level features can help identify partially matching names despite some textual differences.
+RapidFuzz compares text using fuzzy string-matching techniques. It is useful when the input contains minor spelling errors or differences in text formatting.
 
-### Candidate ranking and confirmation
+**Role:** Retrieve candidate medicine products from noisy or imperfect text.
 
-The implementation also considers available evidence such as brand-name matches, medicine strength, and dosage form when ranking candidates. Ranking scores are not calibrated probabilities of correctness. The user must review and confirm the intended medicine.
+**Limitation:** Similar brand names can produce misleading matches, and fuzzy similarity alone does not establish pharmaceutical equivalence.
 
-A sentence-transformer and FAISS-based matcher is not implemented in the evaluated pipeline.
+### 3.2 TF-IDF with Character N-grams
+
+The TF-IDF approach represents text using character n-gram features and compares the resulting vectors. Character-level features can help match partially corrupted words and textual variations.
+
+**Role:** Provide a lexical matching baseline for medicine-candidate retrieval.
+
+**Limitation:** Similar text does not guarantee identical active ingredients, strength, or dosage form.
+
+### 3.3 Sentence Transformers and FAISS
+
+The semantic-matching service encodes medicine descriptions using a Sentence Transformers model. FAISS indexes the resulting vectors and retrieves candidates using vector similarity search.
+
+Catalogue descriptions can include available brand names, generic ingredients, product display information, dosage forms, and manufacturer details.
+
+**Role:** Retrieve semantically similar candidates that may have less direct lexical overlap with the query.
+
+**Limitation:** Embeddings may rank related but incorrect products highly. Semantic similarity does not verify medicine identity or clinical equivalence.
+
+### 3.4 Candidate Reranking and Confirmation
+
+The system can rerank retrieved candidates using available evidence such as:
+
+- Brand-name matches
+- Generic ingredient matches
+- Strength matches or mismatches
+- Dosage-form matches or mismatches
+- Manufacturer information
+- Semantic similarity
+
+These signals influence candidate ordering. The resulting scores are not calibrated probabilities of correctness.
+
+Users must review and confirm the intended medicine before using it in a comparison. The matching system assists identification; it does not replace verification against the actual packaging or a qualified professional's advice.
 
 ## 4. Ingredient-Overlap Analysis
 
-After the user selects medicines, the backend compares the active-ingredient records available in the database.
+Ingredient comparison is performed using the active-ingredient records associated with the selected medicine products in the database.
 
-The system reports recorded shared ingredients and identifies medicines for which ingredient data is unavailable. It can also present possible therapeutic-class duplication separately from exact ingredient overlap when applicable.
+At a high level, the backend:
 
-The result depends on the completeness and correctness of the stored ingredient mappings. A medicine with at least one ingredient link may still have incomplete ingredient information.
+1. Receives the selected medicine records.
+2. Retrieves their recorded active-ingredient links.
+3. Compares the ingredient sets.
+4. Identifies shared recorded ingredients.
+5. Reports relevant incomplete-data warnings and applicable same-class warnings.
 
-Ingredient-overlap analysis does not assess every possible drug interaction, determine appropriate doses, or establish whether a combination is safe for an individual.
+This comparison is deterministic with respect to the stored data and implemented rules. However, the result is only as reliable as the ingredient mappings supplied to it.
 
-## 5. AI-Generated Explanations
+A missing ingredient link can cause the system to miss an overlap. A medicine with at least one ingredient link may also have incomplete ingredient information. The application therefore must not interpret an absence of detected overlap as proof that a combination is safe.
 
-DoubleDose AI uses the Groq API to generate natural-language explanations of ingredient-overlap results.
+Ingredient overlap is not a comprehensive drug-interaction assessment. The application does not account for every patient-specific factor or every possible medication interaction.
 
-The AI explanation is an additional interpretation layer. It does not replace the database comparison, independently verify medicine identities, or establish clinical safety.
+## 5. LLM-Generated Explanations
 
-AI-generated content may be incomplete or inaccurate. The application handles unavailable AI services by displaying an appropriate error or fallback message.
+The application uses the Groq API to generate explanatory text about comparison results.
 
-## 6. External Reference Information
-
-The application can retrieve available drug-label reference information through the openFDA API. Such references may describe products marketed in the United States and may not directly apply to every medicine sold in Bangladesh.
-
-## 7. Evaluation
-
-### Medicine matching
-
-The latest recorded manual benchmark used five hand-typed medicine identification cases.
-
-| Metric                    |    RapidFuzz |       TF-IDF |
-| ------------------------- | -----------: | -----------: |
-| Top-1 accuracy            |          80% |          80% |
-| Top-3 accuracy            |         100% |         100% |
-| Mean reciprocal rank at 3 |         0.90 |         0.90 |
-| No-candidate rate         |           0% |           0% |
-| Mean time per query       | 4.00 seconds | 3.92 seconds |
-| Evaluation cases          |            5 |            5 |
-
-This small benchmark does not establish performance on real medicine photographs or noisy OCR output. Query times depend on the execution environment.
-
-### Ingredient-overlap regression assessment
-
-The recorded developer regression assessment covered 10 cases. The report recorded 100% precision, recall, F1, and result-status accuracy for the evaluated cases.
-
-These expected labels were reconstructed using source identifiers and current database mappings. They are provisional and have not been independently verified by a pharmacist. The assessment is not representative clinical validation.
-
-### Data coverage
-
-The current data-coverage report records 21,721 medicine records, of which 20,485 have at least one ingredient link. This corresponds to 94.31% ingredient-link coverage. The report records 1,236 medicines without ingredient links and only three ingredient links with recorded amounts.
-
-Ingredient-link coverage must not be interpreted as proof that all ingredient mappings are complete or verified.
-
-## 8. Limitations and Future Work
-
-- Evaluate OCR and matching on a larger set of real medicine-package photographs.
-- Measure top-1 and top-k retrieval performance using independently labelled examples.
-- Review medicine and ingredient mappings with qualified domain experts.
-- Improve the completeness of ingredient names, strengths, and amounts.
-- Calibrate candidate confidence only after collecting a sufficiently representative evaluation dataset.
-- Evaluate additional matching approaches only when they can be implemented and compared fairly.
-- Continue improving error handling and the clarity of safety warnings.
-
-## 9. Responsible Use
-
-DoubleDose AI is not a diagnostic, prescribing, or clinical decision-support tool. Users should verify medicine names against the actual packaging and consult a qualified pharmacist or healthcare professional before making medication decisions.
+The LLM provides a natural-language explanation layer on top of the application's data-based analysis. It does not replace the database comparison or
